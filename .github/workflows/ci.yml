@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: moon check, test, build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        uses: moonbit/setup-moonbit@v1
+      - name: moon update
+        run: moon update
+      - name: moon check
+        run: moon check --target all --deny-warn
+      - name: moon test
+        run: moon test --target all
+      - name: moon build
+        run: moon build --target all
+      - name: Verify examples compile
+        run: |
+          moon check --target native examples/parse_cert
+          moon check --target native examples/parse_stream

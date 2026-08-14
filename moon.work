@@ -1,0 +1,5 @@
+// moon.work declares a multi-package workspace.
+//
+// moonasn1 is intentionally a single package for v0.1.0; this file is
+// here so adding `moonasn1-cli` or `moonasn1-wasm-demo` later is a one-line
+// change rather than a directory reorg.

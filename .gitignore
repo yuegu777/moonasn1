@@ -1,0 +1,15 @@
+# MoonBit build artifacts
+target/
+.mooncakes/
+.moon.lock
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local secrets / scratch
+.env
+*.local
