@@ -1,22 +1,5 @@
 {
   "name": "moonasn1",
-  "version": "0.1.0",
-  "description": "Pure MoonBit ASN.1 DER codec and X.509 certificate parser (RFC 5280 profile).",
-  "license": "Apache-2.0",
-  "keywords": [
-    "asn1",
-    "der",
-    "x509",
-    "certificate",
-    "tls",
-    "parser",
-    "moonbit"
-  ],
-  "supported_targets": [
-    "native",
-    "wasm-gc",
-    "js"
-  ],
   "import": [],
   "warnings": {
     "missing_priv": "error",

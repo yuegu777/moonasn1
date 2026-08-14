@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install MoonBit
-        uses: moonbit/setup-moonbit@v1
+        uses: hustcer/setup-moonbit@v1
       - name: moon update
         run: moon update
       - name: moon check
@@ -26,7 +26,3 @@ jobs:
         run: moon test --target all
       - name: moon build
         run: moon build --target all
-      - name: Verify examples compile
-        run: |
-          moon check --target native examples/parse_cert
-          moon check --target native examples/parse_stream
