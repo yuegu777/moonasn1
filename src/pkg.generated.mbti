@@ -14,11 +14,21 @@ pub fn decode_element(Bytes) -> Result[Asn1Value, ReaderError]
 
 pub fn decode_one(Reader) -> Result[Asn1Value, ReaderError]
 
+pub fn find_extension(Array[Extension], String) -> Extension?
+
 pub fn known_oid(Array[Int]) -> String?
+
+pub fn parse_basic_constraints(Bytes) -> BasicConstraints?
 
 pub fn parse_cert(Bytes) -> Result[Certificate, String]
 
+pub fn parse_extensions(Bytes) -> Array[Extension]
+
+pub fn parse_general_names(Bytes) -> Array[GeneralName]?
+
 pub fn parse_generalized_time(Bytes) -> X509Time?
+
+pub fn parse_key_usage(Bytes) -> KeyUsage?
 
 pub fn parse_name(Asn1Value) -> Name?
 
@@ -47,6 +57,12 @@ pub enum Asn1Value {
 pub fn Asn1Value::as_bytes(Self) -> Bytes?
 pub fn Asn1Value::oid_dotted(Self) -> String?
 
+pub struct BasicConstraints {
+  is_ca : Bool
+  path_len : Int?
+} derive(Eq, @debug.Debug)
+pub fn BasicConstraints::to_display(Self) -> String
+
 pub struct Certificate {
   version : Int
   serial_number : Bytes
@@ -56,15 +72,50 @@ pub struct Certificate {
   not_after : X509Time
   subject : Name
   public_key_algorithm : PubkeyAlgorithm
+  extensions : Array[Extension]
+  basic_constraints : BasicConstraints?
+  key_usage : KeyUsage?
+  subject_alt_names : Array[GeneralName]
   extensions_raw : Bytes
   signature_value : Bytes
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 pub fn Certificate::issuer_dn_string(Self) -> String
 pub fn Certificate::subject_dn_string(Self) -> String
 
+pub struct Extension {
+  oid : String
+  name : String
+  critical : Bool
+  value : Bytes
+} derive(Eq, @debug.Debug)
+
+pub enum GeneralName {
+  OtherName(content~ : Bytes)
+  Rfc822Name(String)
+  DnsName(String)
+  DirectoryName(Name)
+  Uri(String)
+  IpAddress(Bytes)
+  Unsupported(tag~ : Int, content~ : Bytes)
+} derive(Eq, @debug.Debug)
+pub fn GeneralName::to_display(Self) -> String
+
+pub struct KeyUsage {
+  digital_signature : Bool
+  non_repudiation : Bool
+  key_encipherment : Bool
+  data_encipherment : Bool
+  key_agreement : Bool
+  key_cert_sign : Bool
+  crl_sign : Bool
+  encipher_only : Bool
+  decipher_only : Bool
+} derive(Eq, @debug.Debug)
+pub fn KeyUsage::to_display(Self) -> String
+
 pub struct Name {
   rdns : Array[RelativeDistinguishedName]
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 pub fn Name::to_string(Self) -> String
 
 pub enum PubkeyAlgorithm {
@@ -102,7 +153,7 @@ pub enum ReaderError {
 pub struct RelativeDistinguishedName {
   oid_arcs : Array[UInt]
   value : String
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub struct Tag {
   class_ : TagClass

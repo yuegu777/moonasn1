@@ -4,13 +4,13 @@
 pub struct RelativeDistinguishedName {
   oid_arcs : Array[UInt]
   value : String
-} derive(Eq)
+} derive(Debug, Eq)
 
 ///|
 /// An X.500 distinguished name — an ordered SEQUENCE of RDNs.
 pub struct Name {
   rdns : Array[RelativeDistinguishedName]
-} derive(Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Render the name as a comma-separated list, e.g. `CN=example.com, O=Acme`.

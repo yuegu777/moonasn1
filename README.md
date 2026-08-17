@@ -41,6 +41,14 @@ fn main {
       println("issuer : " + cert.issuer_dn_string())
       println("valid  : " + cert.not_before.to_rfc3339() + " -> " + cert.not_after.to_rfc3339())
       println("pubkey : " + cert.public_key_algorithm.to_display()) // e.g. RSA-2048
+      // Common extensions come pre-parsed:
+      match cert.basic_constraints {
+        Some(bc) => println("basic  : " + bc.to_display()) // e.g. CA:TRUE, pathlen:0
+        None => ()
+      }
+      for name in cert.subject_alt_names {
+        println("SAN    : " + name.to_display()) // e.g. DNS:example.com
+      }
     }
     Err(e) => println("parse error: " + e)
   }
@@ -74,6 +82,7 @@ moonasn1/
 │ ├── time.mbt         # UTCTime / GeneralizedTime parsing, RFC 3339 output
 │ ├── name.mbt         # X.500 RDN / DN parsing
 │ ├── pubkey.mbt       # SubjectPublicKeyInfo algorithm classification
+│ ├── extension.mbt    # extensions: SAN (GeneralName), KeyUsage, BasicConstraints
 │ ├── cert.mbt         # Certificate decoding (entry point)
 │ └── *_wbtest.mbt     # tests, incl. real-certificate end-to-end regressions
 ├── examples/

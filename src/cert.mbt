@@ -23,11 +23,21 @@ pub struct Certificate {
   subject : Name
   /// Public key algorithm summary (RSA bit length, EC curve name, etc.).
   public_key_algorithm : PubkeyAlgorithm
+  /// All decoded extensions, in certificate order. Empty for certificates
+  /// without a `[3]` extensions block.
+  extensions : Array[Extension]
+  /// Parsed basicConstraints (2.5.29.19); None when absent or malformed.
+  basic_constraints : BasicConstraints?
+  /// Parsed keyUsage (2.5.29.15); None when absent or malformed.
+  key_usage : KeyUsage?
+  /// Parsed subjectAltName (2.5.29.17) entries; empty when absent or
+  /// malformed.
+  subject_alt_names : Array[GeneralName]
   /// Raw extensions SEQUENCE, kept verbatim for callers to decode.
   extensions_raw : Bytes
   /// Raw signature value BIT STRING contents.
   signature_value : Bytes
-} derive(Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Convenience: the issuer DN as a string.
@@ -154,12 +164,31 @@ pub fn parse_cert(buf : Bytes) -> Result[Certificate, String] {
   let spki = tbs[idx]
   idx = idx + 1
   let public_key_algorithm = classify_pubkey(spki)
-  // After SPKI, any explicit [3] extensions are kept as raw bytes. We do
-  // not yet decode individual extensions in v1; we surface the raw
-  // container so callers can decode on demand.
+  // After SPKI, a [3] EXPLICIT extensions block may follow. The raw DER is
+  // kept verbatim, plus the decoded list and the typed common extensions.
   let extensions_raw = match tbs[idx] {
     ContextSpecific(number=3, content=body) => body
     _ => Bytes::new(0)
+  }
+  let extensions = parse_extensions(extensions_raw)
+  let key_usage = match find_extension(extensions, "2.5.29.15") {
+    Some(e) => parse_key_usage(e.value)
+    None => None
+  }
+  let basic_constraints = match find_extension(extensions, "2.5.29.19") {
+    Some(e) => parse_basic_constraints(e.value)
+    None => None
+  }
+  let subject_alt_names : Array[GeneralName] = match find_extension(
+      extensions,
+      "2.5.29.17",
+    ) {
+    Some(e) =>
+      match parse_general_names(e.value) {
+        Some(names) => names
+        None => []
+      }
+    None => []
   }
   // Outer signatureAlgorithm is structurally identical to the inner one;
   // we keep it as the dotted OID string for cross-checking.
@@ -177,6 +206,10 @@ pub fn parse_cert(buf : Bytes) -> Result[Certificate, String] {
     not_after,
     subject,
     public_key_algorithm,
+    extensions,
+    basic_constraints,
+    key_usage,
+    subject_alt_names,
     extensions_raw,
     signature_value,
   })
