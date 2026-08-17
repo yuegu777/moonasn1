@@ -47,6 +47,14 @@ pub fn known_oid(arcs : Array[Int]) -> String? {
     "2.5.29.32" => Some("certificatePolicies")
     "2.5.29.35" => Some("authorityKeyIdentifier")
     "2.5.29.37" => Some("extKeyUsage")
+    // Extended Key Usage purposes (RFC 5280 §4.2.1.12)
+    "2.5.29.37.0" => Some("anyExtendedKeyUsage")
+    "1.3.6.1.5.5.7.3.1" => Some("serverAuth")
+    "1.3.6.1.5.5.7.3.2" => Some("clientAuth")
+    "1.3.6.1.5.5.7.3.3" => Some("codeSigning")
+    "1.3.6.1.5.5.7.3.4" => Some("emailProtection")
+    "1.3.6.1.5.5.7.3.8" => Some("timeStamping")
+    "1.3.6.1.5.5.7.3.9" => Some("OCSPSigning")
     _ => None
   }
 }

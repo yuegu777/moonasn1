@@ -239,6 +239,24 @@ test "parse_cert decodes extensions on the RSA certificate" {
       Uri("https://example.com"),
     ],
   )
+  // extKeyUsage: serverAuth
+  let eku = match cert.ext_key_usage {
+    Some(e) => e
+    None => fail("expected extKeyUsage")
+  }
+  assert_eq(eku.purposes.length(), 1)
+  assert_eq(eku.purposes[0], ServerAuth)
+  assert_eq(eku.to_display(), "serverAuth")
+  // subjectKeyIdentifier: 20-byte SHA-1 thumbprint
+  let kid = match cert.subject_key_id {
+    Some(k) => k
+    None => fail("expected subjectKeyIdentifier")
+  }
+  assert_eq(kid.length(), 20)
+  assert_eq(kid[0].to_int(), 0xE4)
+  assert_eq(kid[19].to_int(), 0xE5)
+  // authorityKeyIdentifier absent on self-signed cert
+  assert_eq(cert.authority_key_id, None)
 }
 
 ///|
@@ -272,6 +290,14 @@ test "parse_cert on a real EC P-256 CA certificate" {
   assert_eq(ku.crl_sign, true)
   assert_eq(ku.digital_signature, false)
   assert_eq(cert.subject_alt_names.length(), 0)
+  assert_eq(cert.ext_key_usage, None)
+  let kid = match cert.subject_key_id {
+    Some(k) => k
+    None => fail("expected subjectKeyIdentifier")
+  }
+  assert_eq(kid.length(), 20)
+  assert_eq(kid[0].to_int(), 0x9E)
+  assert_eq(cert.authority_key_id, None)
 }
 
 ///|

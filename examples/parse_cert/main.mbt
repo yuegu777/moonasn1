@@ -46,6 +46,18 @@ fn main {
     }
     println("  SAN     : " + buf.to_string())
   }
+  match cert.ext_key_usage {
+    Some(eku) => println("  extKeyUsage: " + eku.to_display())
+    None => ()
+  }
+  match cert.subject_key_id {
+    Some(kid) => println("  subjectKeyId: " + to_hex(kid))
+    None => ()
+  }
+  match cert.authority_key_id {
+    Some(aki) => println("  authKeyId: " + aki.to_display())
+    None => ()
+  }
 }
 
 ///|

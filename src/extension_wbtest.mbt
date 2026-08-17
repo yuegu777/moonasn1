@@ -137,3 +137,106 @@ test "parse_extensions tolerates empty and non-container input" {
   let bad = Bytes::from_array([b'\x01', b'\x01', b'\xFF'])
   assert_eq(parse_extensions(bad).length(), 0)
 }
+
+///|
+test "parse_ext_key_usage decodes known and unknown purposes" {
+  // SEQUENCE { OID 1.3.6.1.5.5.7.3.1 (serverAuth),
+  //            OID 1.3.6.1.5.5.7.3.2 (clientAuth) }
+  let inner = Bytes::from_array([
+    b'\x30', b'\x14', b'\x06', b'\x08', b'\x2B', b'\x06', b'\x01', b'\x05', b'\x05', b'\x07',
+    b'\x03', b'\x01', b'\x06', b'\x08', b'\x2B', b'\x06', b'\x01', b'\x05', b'\x05', b'\x07',
+    b'\x03', b'\x02',
+  ])
+  let eku = match parse_ext_key_usage(inner) {
+    Some(e) => e
+    None => fail("expected ExtKeyUsage")
+  }
+  assert_eq(eku.purposes.length(), 2)
+  assert_eq(eku.purposes[0], ServerAuth)
+  assert_eq(eku.purposes[1], ClientAuth)
+  assert_eq(eku.to_display(), "serverAuth, clientAuth")
+  // Unknown OID 1.2.3.4.5 -> Other
+  let other = Bytes::from_array([
+    b'\x30', b'\x06', b'\x06', b'\x04', b'\x2A', b'\x03', b'\x04', b'\x05',
+  ])
+  let eku2 = match parse_ext_key_usage(other) {
+    Some(e) => e
+    None => fail("expected ExtKeyUsage")
+  }
+  assert_eq(eku2.purposes[0], Other(oid="1.2.3.4.5"))
+  assert_eq(eku2.to_display(), "1.2.3.4.5")
+  // Not a SEQUENCE.
+  let bad = Bytes::from_array([b'\x05', b'\x00'])
+  assert_eq(parse_ext_key_usage(bad), None)
+}
+
+///|
+test "parse_subject_key_identifier extracts the key id" {
+  // OCTET STRING { OCTET STRING { 20-byte key id } }
+  let inner = Bytes::from_array([
+    b'\x04', b'\x14', b'\xE4', b'\xF9', b'\xA5', b'\x42', b'\x6C', b'\x7F', b'\x68', b'\x2F',
+    b'\xFF', b'\x79', b'\x56', b'\x52', b'\x28', b'\xBD', b'\xD3', b'\x15', b'\xCC', b'\xD1',
+    b'\x30', b'\xE5',
+  ])
+  let kid = match parse_subject_key_identifier(inner) {
+    Some(k) => k
+    None => fail("expected key id")
+  }
+  assert_eq(kid.length(), 20)
+  assert_eq(kid[0].to_int(), 0xE4)
+  assert_eq(kid[19].to_int(), 0xE5)
+  // Not an OCTET STRING.
+  let bad = Bytes::from_array([b'\x05', b'\x00'])
+  assert_eq(parse_subject_key_identifier(bad), None)
+}
+
+///|
+test "parse_authority_key_identifier decodes all three fields" {
+  // SEQUENCE {
+  //   [0] keyIdentifier (20 bytes),
+  //   [1] authorityCertIssuer { [2] dNSName "ca.example.com" },
+  //   [2] authorityCertSerialNumber 0x01
+  // }
+  let inner = Bytes::from_array([
+    b'\x30', b'\x2B', b'\x80', b'\x14', b'\xE4', b'\xF9', b'\xA5', b'\x42', b'\x6C', b'\x7F',
+    b'\x68', b'\x2F', b'\xFF', b'\x79', b'\x56', b'\x52', b'\x28', b'\xBD', b'\xD3', b'\x15',
+    b'\xCC', b'\xD1', b'\x30', b'\xE5', b'\xA1', b'\x10', b'\x82', b'\x0E', b'\x63', b'\x61',
+    b'\x2E', b'\x65', b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E', b'\x63',
+    b'\x6F', b'\x6D', b'\x82', b'\x01', b'\x01',
+  ])
+  let aki = match parse_authority_key_identifier(inner) {
+    Some(a) => a
+    None => fail("expected AuthorityKeyIdentifier")
+  }
+  assert_eq(aki.key_identifier.unwrap().length(), 20)
+  let issuer = match aki.cert_issuer {
+    Some(names) => names
+    None => fail("expected cert_issuer")
+  }
+  assert_eq(issuer.length(), 1)
+  assert_eq(issuer[0], DnsName("ca.example.com"))
+  assert_eq(aki.cert_serial_number, Some(Bytes::from_array([b'\x01'])))
+  assert_eq(
+    aki.to_display(),
+    "keyid:e4f9a5426c7f682fff79565228bdd315ccd130e5, issuer:DNS:ca.example.com, serial:01",
+  )
+}
+
+///|
+test "parse_authority_key_identifier with only keyIdentifier" {
+  // SEQUENCE { [0] keyIdentifier (4 bytes) }
+  let inner = Bytes::from_array([
+    b'\x30', b'\x06', b'\x80', b'\x04', b'\xDE', b'\xAD', b'\xBE', b'\xEF',
+  ])
+  let aki = match parse_authority_key_identifier(inner) {
+    Some(a) => a
+    None => fail("expected AuthorityKeyIdentifier")
+  }
+  assert_eq(aki.key_identifier, Some(Bytes::from_array([b'\xDE', b'\xAD', b'\xBE', b'\xEF'])))
+  assert_eq(aki.cert_issuer, None)
+  assert_eq(aki.cert_serial_number, None)
+  assert_eq(aki.to_display(), "keyid:deadbeef")
+  // Not a SEQUENCE.
+  let bad = Bytes::from_array([b'\x05', b'\x00'])
+  assert_eq(parse_authority_key_identifier(bad), None)
+}

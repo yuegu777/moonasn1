@@ -308,3 +308,172 @@ fn join_strings(parts : Array[String]) -> String {
   }
   buf.to_string()
 }
+
+///|
+/// One `KeyPurposeId` from the `extKeyUsage` extension (RFC 5280 §4.2.1.12).
+pub enum KeyPurpose {
+  ServerAuth
+  ClientAuth
+  CodeSigning
+  EmailProtection
+  TimeStamping
+  OcspSigning
+  AnyExtendedKeyUsage
+  Other(oid~ : String)
+} derive(Debug, Eq)
+
+///|
+pub fn KeyPurpose::to_display(self : KeyPurpose) -> String {
+  match self {
+    ServerAuth => "serverAuth"
+    ClientAuth => "clientAuth"
+    CodeSigning => "codeSigning"
+    EmailProtection => "emailProtection"
+    TimeStamping => "timeStamping"
+    OcspSigning => "OCSPSigning"
+    AnyExtendedKeyUsage => "anyExtendedKeyUsage"
+    Other(oid~) => oid
+  }
+}
+
+///|
+/// The `extKeyUsage` extension (RFC 5280 §4.2.1.12). A SEQUENCE OF
+/// KeyPurposeId; the array preserves certificate order.
+pub struct ExtKeyUsage {
+  purposes : Array[KeyPurpose]
+} derive(Debug, Eq)
+
+///|
+/// Parse an `extKeyUsage` extnValue (a DER-encoded `SEQUENCE OF
+/// KeyPurposeId`). Returns None on any structural error.
+pub fn parse_ext_key_usage(inner : Bytes) -> ExtKeyUsage? {
+  guard decode_element(inner) is Ok(Sequence(items)) else { return None }
+  let out : Array[KeyPurpose] = []
+  for item in items {
+    guard item is ObjectIdentifier(arcs) else { return None }
+    let dotted = arcs_to_dotted(arcs_to_int(arcs))
+    out.push(key_purpose_from(dotted))
+  }
+  Some({ purposes: out })
+}
+
+fn key_purpose_from(dotted : String) -> KeyPurpose {
+  match dotted {
+    "2.5.29.37.0" => AnyExtendedKeyUsage
+    "1.3.6.1.5.5.7.3.1" => ServerAuth
+    "1.3.6.1.5.5.7.3.2" => ClientAuth
+    "1.3.6.1.5.5.7.3.3" => CodeSigning
+    "1.3.6.1.5.5.7.3.4" => EmailProtection
+    "1.3.6.1.5.5.7.3.8" => TimeStamping
+    "1.3.6.1.5.5.7.3.9" => OcspSigning
+    _ => Other(oid=dotted)
+  }
+}
+
+///|
+pub fn ExtKeyUsage::to_display(self : ExtKeyUsage) -> String {
+  let parts : Array[String] = []
+  for p in self.purposes {
+    parts.push(p.to_display())
+  }
+  join_strings(parts)
+}
+
+///|
+/// Parse a `subjectKeyIdentifier` extnValue (RFC 5280 §4.2.1.2). The
+/// extnValue is an OCTET STRING wrapping a KeyIdentifier (another OCTET
+/// STRING); we return the inner KeyIdentifier bytes.
+pub fn parse_subject_key_identifier(inner : Bytes) -> Bytes? {
+  guard decode_element(inner) is Ok(OctetString(key_id)) else { return None }
+  Some(key_id)
+}
+
+///|
+/// The `authorityKeyIdentifier` extension (RFC 5280 §4.2.1.1).
+pub struct AuthorityKeyIdentifier {
+  /// [0] keyIdentifier — the raw KeyIdentifier bytes.
+  key_identifier : Bytes?
+  /// [1] authorityCertIssuer — parsed GeneralNames; None when absent.
+  cert_issuer : Array[GeneralName]?
+  /// [2] authorityCertSerialNumber — raw INTEGER body bytes.
+  cert_serial_number : Bytes?
+} derive(Debug, Eq)
+
+///|
+/// Parse an `authorityKeyIdentifier` extnValue (a DER-encoded SEQUENCE
+/// with implicit-tagged [0]/[1]/[2] children). Returns None when the
+/// outer container is not a SEQUENCE.
+pub fn parse_authority_key_identifier(inner : Bytes) -> AuthorityKeyIdentifier? {
+  guard decode_element(inner) is Ok(Sequence(parts)) else { return None }
+  let mut key_id : Bytes? = None
+  let mut issuer : Array[GeneralName]? = None
+  let mut serial : Bytes? = None
+  for p in parts {
+    guard p is ContextSpecific(number=tag, content=body) else { continue }
+    match tag {
+      0 => key_id = Some(body)
+      1 => issuer = Some(parse_general_names_inline(body))
+      2 => serial = Some(body)
+      _ => ()
+    }
+  }
+  Some({
+    key_identifier: key_id,
+    cert_issuer: issuer,
+    cert_serial_number: serial,
+  })
+}
+
+///|
+/// Parse GeneralNames from the *content* of a constructed [1] tag — i.e.
+/// the children of the original SEQUENCE OF, without the outer wrapper.
+/// This is how authorityKeyIssuer carries its GeneralNames (implicit tag).
+fn parse_general_names_inline(body : Bytes) -> Array[GeneralName] {
+  let out : Array[GeneralName] = []
+  let r = Reader::new(body)
+  while !r.eof() {
+    match decode_one(r) {
+      Ok(v) => out.push(general_name_from(v))
+      Err(_) => break
+    }
+  }
+  out
+}
+
+///|
+pub fn AuthorityKeyIdentifier::to_display(self : AuthorityKeyIdentifier) -> String {
+  let parts : Array[String] = []
+  match self.key_identifier {
+    Some(kid) => parts.push("keyid:" + bytes_to_hex(kid))
+    None => ()
+  }
+  match self.cert_issuer {
+    Some(names) => {
+      let buf = StringBuilder::new()
+      buf.write_string("issuer:")
+      for i, name in names {
+        if i > 0 {
+          buf.write_char(',')
+        }
+        buf.write_string(name.to_display())
+      }
+      parts.push(buf.to_string())
+    }
+    None => ()
+  }
+  match self.cert_serial_number {
+    Some(serial) => parts.push("serial:" + bytes_to_hex(serial))
+    None => ()
+  }
+  join_strings(parts)
+}
+
+fn bytes_to_hex(b : Bytes) -> String {
+  let buf = StringBuilder::new()
+  for byte in b {
+    let v = byte.to_int()
+    buf.write_char(hex_lc(v >> 4))
+    buf.write_char(hex_lc(v & 0xF))
+  }
+  buf.to_string()
+}
