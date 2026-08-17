@@ -1,7 +1,6 @@
-// moon.work declares a multi-module workspace.
-//
-// For now, moonasn1 is a single module. The workspace file is kept for
-// future expansion (e.g., adding a CLI or WASM demo module).
+// Single-package workspace root.
+// For now, moonasn1 is one module; the workspace file is kept for future
+// expansion (e.g., adding a CLI or WASM demo module).
 
 members = [
   "./",

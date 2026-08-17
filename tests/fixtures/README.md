@@ -32,7 +32,8 @@ Two reasons:
    license audits. Keeping the fixtures in a separate commit, with a
    clearly-scoped purpose, makes the audit trivial.
 
-The parser is fully testable without these fixtures: the `*_test.mbt`
-files under `src/asn1/` and `src/x509/` exercise the codec and the
-basic shape of every variant directly with hand-rolled byte arrays.
-The fixtures only add coverage of real-world certificate edge cases.
+The parser is fully testable without these fixtures: the `*_wbtest.mbt`
+files under `src/` exercise the codec and the basic shape of every variant
+directly with hand-rolled byte arrays, plus end-to-end regressions against
+real self-signed certificates embedded in `src/cert_wbtest.mbt`. The
+fixtures only add coverage of real-world certificate edge cases.

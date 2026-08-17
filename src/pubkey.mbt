@@ -5,37 +5,36 @@
 pub enum PubkeyAlgorithm {
   /// RSA with the modulus bit length recovered from the integer's leading
   /// byte count.
-  Rsa(modulus_bits : Int?)
+  Rsa(modulus_bits~ : Int?)
   /// EC, with the named curve OID if it was a named curve.
-  Ec(curve : String?)
+  Ec(curve~ : String?)
   /// Ed25519 (RFC 8422 / 8032).
   Ed25519
   /// Any other algorithm. The OID's dotted-decimal representation is
   /// preserved for callers to dispatch on.
-  Other(oid : String)
-} derive(Show, Eq)
+  Other(oid~ : String)
+} derive(Debug, Eq)
 
 ///|
 /// Inspect a `SubjectPublicKeyInfo` ASN.1 value and return the algorithm.
 /// `SubjectPublicKeyInfo` is `SEQUENCE { algorithm AlgorithmIdentifier,
 /// subjectPublicKey BIT STRING }`. We only look at the algorithm.
-pub fn classify_pubkey(spki : @asn1.Asn1Value) -> PubkeyAlgorithm {
-  guard spki is @asn1.Sequence(parts) else { return Other(oid="?") }
+pub fn classify_pubkey(spki : Asn1Value) -> PubkeyAlgorithm {
+  guard spki is Sequence(parts) else { return Other(oid="?") }
   if parts.length() < 1 {
     return Other(oid="?")
   }
-  guard parts[0] is @asn1.Sequence(alg) else { return Other(oid="?") }
+  guard parts[0] is Sequence(alg) else { return Other(oid="?") }
   if alg.length() < 1 {
     return Other(oid="?")
   }
-  guard alg[0] is @asn1.ObjectIdentifier(arcs) else { return Other(oid="?") }
-  let s = @asn1_oid.arcs_to_dotted(arcs_to_int(arcs))
+  guard alg[0] is ObjectIdentifier(arcs) else { return Other(oid="?") }
+  let s = arcs_to_dotted(arcs_to_int(arcs))
   match s {
     "1.2.840.113549.1.1.1" =>
       // Look at the embedded RSA key for the modulus bit length.
       match (try_get_sequence(spki), try_get_bitstring(spki)) {
-        (Some(parts), Some(bits)) => {
-          ignore(parts)
+        (Some(_), Some(bits)) => {
           let n = rsa_modulus_bits(bits)
           Rsa(modulus_bits=n)
         }
@@ -43,10 +42,10 @@ pub fn classify_pubkey(spki : @asn1.Asn1Value) -> PubkeyAlgorithm {
       }
     "1.2.840.10045.2.1" => {
       // EC: the algorithm parameters carry the curve OID.
-      let curve = if alg.length() >= 2 {
+      let curve : String? = if alg.length() >= 2 {
         match alg[1] {
-          @asn1.ObjectIdentifier(arcs) =>
-            @asn1_oid.known_oid(arcs_to_int(arcs)).unwrap_or("unknown-curve")
+          ObjectIdentifier(arcs) =>
+            Some(known_oid(arcs_to_int(arcs)).unwrap_or("unknown-curve"))
           _ => None
         }
       } else {
@@ -59,29 +58,38 @@ pub fn classify_pubkey(spki : @asn1.Asn1Value) -> PubkeyAlgorithm {
   }
 }
 
-fn arcs_to_int(arcs : Array[UInt]) -> Array[Int] {
-  let out : Array[Int] = []
-  for a in arcs {
-    out.push(a.to_int())
+///|
+/// A human-readable summary, e.g. `RSA-2048`, `EC-P-256`, `Ed25519`.
+pub fn PubkeyAlgorithm::to_display(self : PubkeyAlgorithm) -> String {
+  match self {
+    Rsa(modulus_bits=Some(n)) => "RSA-" + n.to_string()
+    Rsa(..) => "RSA"
+    Ec(curve=Some(c)) => "EC-" + c
+    Ec(..) => "EC"
+    Ed25519 => "Ed25519"
+    Other(oid=o) => "unknown (" + o + ")"
   }
-  out
 }
 
-fn try_get_sequence(v : @asn1.Asn1Value) -> Array[@asn1.Asn1Value]? {
+fn try_get_sequence(v : Asn1Value) -> Array[Asn1Value]? {
   match v {
-    @asn1.Sequence(items) => Some(items)
+    Sequence(items) => Some(items)
     _ => None
   }
 }
 
-fn try_get_bitstring(v : @asn1.Asn1Value) -> Bytes? {
+fn try_get_bitstring(v : Asn1Value) -> Bytes? {
   match v {
-    @asn1.Sequence(items) =>
+    Sequence(items) => {
+      let mut result : Bytes? = None
       for it in items {
-        guard it is @asn1.BitString(unused_bits=_, data) else { continue }
-        return Some(data)
+        if it is BitString(data~, ..) {
+          result = Some(data)
+          break
+        }
       }
-      None
+      result
+    }
     _ => None
   }
 }
@@ -95,12 +103,12 @@ fn try_get_bitstring(v : @asn1.Asn1Value) -> Bytes? {
 /// (byte count * 8).
 fn rsa_modulus_bits(key : Bytes) -> Int? {
   // Walk into the SEQUENCE { INTEGER n, INTEGER e }.
-  let r = @asn1_reader.Reader::new(key)
-  match @asn1_decode.decode_one(r) {
-    Ok(@asn1.Sequence(parts)) =>
+  let r = Reader::new(key)
+  match decode_one(r) {
+    Ok(Sequence(parts)) =>
       if parts.length() >= 1 {
         match parts[0] {
-          @asn1.Integer(n) => Some(integer_bit_length(n))
+          Integer(n) => Some(integer_bit_length(n))
           _ => None
         }
       } else {
@@ -111,18 +119,17 @@ fn rsa_modulus_bits(key : Bytes) -> Int? {
 }
 
 fn integer_bit_length(b : Bytes) -> Int {
-  let mut bits = 0
-  for i, byte in b {
-    let v = byte.to_int()
-    if v == 0 {
-      bits = bits
-    } else {
-      // Bit length of this byte + trailing zero bits.
-      bits = i * 8 + 8 - leading_zeros_in_byte(v)
-      return bits
-    }
+  let n = b.length()
+  let mut i = 0
+  while i < n && b[i].to_int() == 0 {
+    i = i + 1
   }
-  bits
+  if i == n {
+    return 0
+  }
+  // All-zero prefix skipped: bit length is the remaining byte count * 8
+  // minus the leading zeros of the first significant byte.
+  (n - i) * 8 - leading_zeros_in_byte(b[i].to_int())
 }
 
 fn leading_zeros_in_byte(v : Int) -> Int {

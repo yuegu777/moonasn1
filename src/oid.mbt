@@ -31,15 +31,11 @@ pub fn known_oid(arcs : Array[Int]) -> String? {
     // Public key algorithms
     "1.2.840.113549.1.1.1" => Some("rsaEncryption")
     "1.2.840.10045.2.1" => Some("ecPublicKey")
-    "1.3.101.112" => Some("ed25519")
     // EC curves (RFC 5480 / RFC 8422)
-    "1.2.840.10045.3.1.7" => Some("prime256v1")
-    "1.3.132.0.34" => Some("secp384r1")
-    "1.3.132.0.35" => Some("secp521r1")
-    "1.3.132.0.10" => Some("secp256k1")
     "1.2.840.10045.3.1.7" => Some("P-256")
     "1.3.132.0.34" => Some("P-384")
     "1.3.132.0.35" => Some("P-521")
+    "1.3.132.0.10" => Some("secp256k1")
     // Extensions (RFC 5280 §4.2)
     "2.5.29.14" => Some("subjectKeyIdentifier")
     "2.5.29.15" => Some("keyUsage")
@@ -51,10 +47,16 @@ pub fn known_oid(arcs : Array[Int]) -> String? {
     "2.5.29.32" => Some("certificatePolicies")
     "2.5.29.35" => Some("authorityKeyIdentifier")
     "2.5.29.37" => Some("extKeyUsage")
-    // SAN names
-    "2.5.4.3" => Some("dNSName-rfc822-equiv")  // duplicate intentional, listed for documentation
     _ => None
   }
+}
+
+fn arcs_to_int(arcs : Array[UInt]) -> Array[Int] {
+  let out : Array[Int] = []
+  for a in arcs {
+    out.push(a.reinterpret_as_int())
+  }
+  out
 }
 
 ///|

@@ -27,25 +27,32 @@ gap with a small, strict, easy-to-audit library:
 
 ## Quick start
 
+`moonasn1` is a single package. Import it by path and call `parse_cert`,
+which returns a `Result`:
+
 ```moonbit
-///|
+// moon.pkg:
+//   import { "yuegu777/moonasn1/src" @moonasn1, }
 fn main {
-  let der_bytes : Bytes = read_file("cert.der")
-  let cert = @x509.parse_cert(der_bytes) catch {
-    e => {
-      println("parse error: \{e}")
-      return
+  // der_bytes comes from a .der file or from base64-decoding a PEM block.
+  match @moonasn1.parse_cert(der_bytes) {
+    Ok(cert) => {
+      println("subject: " + cert.subject_dn_string())
+      println("issuer : " + cert.issuer_dn_string())
+      println("valid  : " + cert.not_before.to_rfc3339() + " -> " + cert.not_after.to_rfc3339())
+      println("pubkey : " + cert.public_key_algorithm.to_display()) // e.g. RSA-2048
     }
-  }
-  println("subject: \{cert.subject_dn_string()}")
-  println("issuer : \{cert.issuer_dn_string()}")
-  println("valid  : \{cert.not_before} -> \{cert.not_after}")
-  match cert.public_key_algorithm {
-    Rsa(modulus_bits=Some(n)) => println("RSA key: \{n} bits")
-    Ec(curve=Some(curve)) => println("EC key: \{curve}")
-    _ => ()
+    Err(e) => println("parse error: " + e)
   }
 }
+```
+
+The examples embed real self-signed certificates (RSA-2048 and EC P-256,
+generated with `openssl req -x509`), so they run anywhere with no file IO:
+
+```
+moon run examples/parse_cert     # parse one DER certificate
+moon run examples/parse_stream   # parse an embedded PEM bundle
 ```
 
 ## Project layout
@@ -56,35 +63,33 @@ moonasn1/
 ├── REFERENCES.md      # upstream specs and reference projects (audit trail)
 ├── THIRD_PARTY_NOTICES.md
 ├── LICENSE            # Apache-2.0
-├── moon.pkg.json      # main package manifest
-├── moon.work          # multi-target workspace
-├── src/
-│ ├── asn1/            # generic DER codec
-│ │ ├── tag.mbt        # ASN.1 tag constants and TagNumber enum
-│ │ ├── value.mbt      # Asn1Value ADT and Show/derive helpers
-│ │ ├── reader.mbt     # bounded Bytes reader
-│ │ ├── decode.mbt     # top-level DER decoder
-│ │ └── oid.mbt        # ObjectIdentifier type and lookup table
-│ └── x509/            # RFC 5280 layer
-│ ├── time.mbt         # ASN.1 UTCTime / GeneralizedTime parsers
-│ ├── name.mbt         # RDN / DN parser
-│ ├── tbs.mbt          # TBSCertificate decoding
+├── moon.mod           # module manifest
+├── moon.work          # workspace root
+├── src/               # the library (single package: DER codec + X.509 layer)
+│ ├── tag.mbt          # ASN.1 tag classes and universal tag numbers
+│ ├── value.mbt        # Asn1Value ADT (the parsed tree)
+│ ├── reader.mbt       # bounded Bytes reader with depth/length limits
+│ ├── decode.mbt       # top-level DER decoder
+│ ├── oid.mbt          # OID dotted-decimal helpers and lookup table
+│ ├── time.mbt         # UTCTime / GeneralizedTime parsing, RFC 3339 output
+│ ├── name.mbt         # X.500 RDN / DN parsing
+│ ├── pubkey.mbt       # SubjectPublicKeyInfo algorithm classification
 │ ├── cert.mbt         # Certificate decoding (entry point)
-│ └── pubkey.mbt       # SubjectPublicKeyInfo + algorithm OIDs
+│ └── *_wbtest.mbt     # tests, incl. real-certificate end-to-end regressions
 ├── examples/
-│ ├── parse_cert/      # parse a single .der certificate
-│ └── parse_stream/    # parse a PEM bundle
-├── tests/             # moon test
+│ ├── parse_cert/      # parse a single DER certificate (embedded sample)
+│ └── parse_stream/    # parse a PEM bundle (embedded sample)
+├── tests/fixtures/    # reserved for third-party test vectors (see its README)
 └── .github/workflows/ci.yml
 ```
 
 ## Running locally
 
 ```bash
-moon check
-moon test
-moon run examples/parse_cert
-moon run examples/parse_stream
+moon check                      # type-check (default target)
+moon check --target all         # native, wasm, wasm-gc, js
+moon test                       # run the test suite
+moon run examples/parse_cert    # run the examples
 ```
 
 ## Non-goals (explicit)

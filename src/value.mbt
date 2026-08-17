@@ -14,7 +14,7 @@ pub enum Asn1Value {
   /// encoded form round-trips.
   Integer(Bytes)
   /// BIT STRING with the trailing bit count preserved.
-  BitString(unused_bits : UInt, data : Bytes)
+  BitString(unused_bits~ : UInt, data~ : Bytes)
   /// OCTET STRING, byte-aligned.
   OctetString(Bytes)
   /// NULL, carries no payload.
@@ -38,11 +38,11 @@ pub enum Asn1Value {
   /// A context-specific tag that we did not interpret. The tag number and
   /// the raw bytes of the element body are preserved for the caller to
   /// decode.
-  ContextSpecific(number : Int, content : Bytes)
+  ContextSpecific(number~ : Int, content~ : Bytes)
   /// Any element we did not decode at all (used by the X.509 layer for
   /// fields out of v1 scope).
-  Raw(tag : @asn1.Tag, content : Bytes)
-} derive(Show, Eq)
+  Raw(tag~ : Tag, content~ : Bytes)
+} derive(Debug, Eq)
 
 ///|
 /// Convenience: return the bytes of an OCTET STRING or a Raw element.
@@ -50,8 +50,8 @@ pub enum Asn1Value {
 pub fn Asn1Value::as_bytes(self : Asn1Value) -> Bytes? {
   match self {
     OctetString(b) => Some(b)
-    BitString(unused_bits=_, data=b) => Some(b)
-    Raw(_, content) => Some(content)
+    BitString(data~, ..) => Some(data)
+    Raw(content~, ..) => Some(content)
     _ => None
   }
 }
@@ -61,14 +61,11 @@ pub fn Asn1Value::as_bytes(self : Asn1Value) -> Bytes? {
 pub fn Asn1Value::oid_dotted(self : Asn1Value) -> String? {
   match self {
     ObjectIdentifier(arcs) => {
-      let buf = StringBuilder::new()
-      for i, arc in arcs {
-        if i > 0 {
-          buf.write_char('.')
-        }
-        buf.write_string(arc.to_string())
+      let ints : Array[Int] = []
+      for a in arcs {
+        ints.push(a.reinterpret_as_int())
       }
-      Some(buf.to_string())
+      Some(arcs_to_dotted(ints))
     }
     _ => None
   }

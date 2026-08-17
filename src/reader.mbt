@@ -3,7 +3,7 @@
 /// and checks for end-of-buffer, which keeps the worst-case runtime of the
 /// decoder linear in the buffer size.
 ///
-/// Bounds are part of the type-level contract: a `Reader` is constructed
+/// Bounds are part of the type name-level contract: a `Reader` is constructed
 /// with a maximum element count and a maximum nesting depth, and any
 /// decoded value that exceeds them causes a `ReaderError::LimitExceeded`.
 pub struct Reader {
@@ -20,14 +20,14 @@ pub enum ReaderError {
   /// The reader reached the end of the buffer while more bytes were expected.
   Truncated
   /// A length or tag exceeded `max_len` or `max_depth`.
-  LimitExceeded(kind : String)
+  LimitExceeded(kind~ : String)
   /// A length prefix was inconsistent with the buffer (e.g. indefinite
   /// length, which DER forbids).
   MalformedLength
   /// The encoded data violated a structural rule (e.g. a boolean not
   /// exactly one byte, or an integer that overflows).
   MalformedValue
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Construct a reader with explicit safety bounds. Defaults are chosen to
@@ -58,7 +58,7 @@ pub fn Reader::eof(self : Reader) -> Bool {
 
 ///|
 /// Read one byte and advance. Returns `Truncated` if the buffer is exhausted.
-pub fn Reader::read_byte(self : Reader) -> Result[UInt8, ReaderError] {
+pub fn Reader::read_byte(self : Reader) -> Result[Byte, ReaderError] {
   if self.pos >= self.buf.length() {
     Err(Truncated)
   } else {
@@ -72,22 +72,23 @@ pub fn Reader::read_byte(self : Reader) -> Result[UInt8, ReaderError] {
 /// Read `n` bytes and advance. Returns `Truncated` if fewer than `n` remain.
 pub fn Reader::read_bytes(self : Reader, n : Int) -> Result[Bytes, ReaderError] {
   if n < 0 || n > self.max_len {
-    Err(LimitExceeded("read_bytes: n=" + n.to_string()))
+    Err(LimitExceeded(kind="read_bytes: n=" + n.to_string()))
   } else if self.pos + n > self.buf.length() {
     Err(Truncated)
   } else {
-    let out = Bytes::make(n, b'\x00')
+    // Build a new Bytes by copying from the underlying buffer.
+    let tmp : FixedArray[Byte] = FixedArray::make(n, b'\x00')
     for i in 0..<n {
-      out[i] = self.buf[self.pos + i]
+      tmp[i] = self.buf[self.pos + i]
     }
     self.pos = self.pos + n
-    Ok(out)
+    Ok(Bytes::from_array(tmp))
   }
 }
 
 ///|
 /// Peek one byte without advancing.
-pub fn Reader::peek_byte(self : Reader) -> Result[UInt8, ReaderError] {
+pub fn Reader::peek_byte(self : Reader) -> Result[Byte, ReaderError] {
   if self.pos >= self.buf.length() {
     Err(Truncated)
   } else {
@@ -102,9 +103,9 @@ pub fn Reader::enter(self : Reader) -> Result[Unit, ReaderError] {
   self.depth = self.depth + 1
   self.element_count = self.element_count + 1
   if self.depth > self.max_depth {
-    Err(LimitExceeded("depth=" + self.depth.to_string()))
+    Err(LimitExceeded(kind="depth=" + self.depth.to_string()))
   } else if self.element_count > self.max_len {
-    Err(LimitExceeded("element_count"))
+    Err(LimitExceeded(kind="element_count"))
   } else {
     Ok(())
   }

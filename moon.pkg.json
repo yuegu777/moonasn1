@@ -1,8 +1,0 @@
-{
-  "name": "moonasn1",
-  "import": [],
-  "warnings": {
-    "missing_priv": "error",
-    "unused_constructor": "error"
-  }
-}

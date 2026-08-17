@@ -9,7 +9,7 @@ pub enum TagClass {
   Application
   ContextSpecific
   Private
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Universal tag numbers per X.680 §3.8 and the X.509 module.
@@ -51,7 +51,7 @@ pub enum TagNumber {
   BMPString          // 30
   // 31+ are unused in current ASN.1 modules.
   Unknown(Int)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// The full tag header (class + number + constructed bit).
@@ -60,12 +60,12 @@ pub struct Tag {
   number : TagNumber
   // Whether the element is constructed (true) or primitive (false).
   constructed : Bool
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Build the identifier byte used at the head of every DER element
 /// (X.690 §8.1.2.3 / Table 1).
-pub fn Tag::identifier_byte(self : Tag) -> UInt8 {
+pub fn Tag::identifier_byte(self : Tag) -> Byte {
   let mut b = 0
   match self.class_ {
     Universal => b = b
@@ -111,7 +111,7 @@ pub fn Tag::identifier_byte(self : Tag) -> UInt8 {
     Unknown(n) => n
   }
   if n < 31 {
-    (b | n).to_uint8()
+    (b | n).to_byte()
   } else {
     // long-form tag: low five bits = 0x1F; full number follows as base-128
     // bytes. Callers must use `encode_long_form_tag` for n >= 31.

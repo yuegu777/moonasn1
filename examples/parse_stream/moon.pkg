@@ -1,0 +1,6 @@
+pkgtype(kind: "executable")
+
+import {
+  "yuegu777/moonasn1/src" @moonasn1,
+  "moonbitlang/core/encoding/base64" @base64,
+}

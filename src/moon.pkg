@@ -1,0 +1,6 @@
+// moonasn1: pure MoonBit ASN.1 DER codec and X.509 certificate parser.
+// Single-package library; subfolders are reserved for future use
+// (e.g. moonasn1-cli, moonasn1-wasm-demo).
+
+import {
+}

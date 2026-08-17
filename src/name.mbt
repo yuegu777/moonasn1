@@ -4,13 +4,13 @@
 pub struct RelativeDistinguishedName {
   oid_arcs : Array[UInt]
   value : String
-} derive(Show, Eq)
+} derive(Eq)
 
 ///|
 /// An X.500 distinguished name — an ordered SEQUENCE of RDNs.
 pub struct Name {
   rdns : Array[RelativeDistinguishedName]
-} derive(Show, Eq)
+} derive(Eq)
 
 ///|
 /// Render the name as a comma-separated list, e.g. `CN=example.com, O=Acme`.
@@ -20,7 +20,7 @@ pub fn Name::to_string(self : Name) -> String {
     if i > 0 {
       buf.write_string(", ")
     }
-    buf.write_string(@asn1_oid.known_oid(arcs_to_int(rdn.oid_arcs)).unwrap_or("?"))
+    buf.write_string(known_oid(arcs_to_int(rdn.oid_arcs)).unwrap_or("?"))
     buf.write_char('=')
     buf.write_string(rdn.value)
   }
@@ -30,17 +30,17 @@ pub fn Name::to_string(self : Name) -> String {
 ///|
 /// Parse an X.500 Name from its DER encoding (a SEQUENCE of SET OF
 /// SEQUENCE { OID, ANY }). We flatten to RDNs in the order they appear.
-pub fn parse_name(value : @asn1.Asn1Value) -> Name? {
-  guard value is @asn1.Sequence(outer) else { return None }
+pub fn parse_name(value : Asn1Value) -> Name? {
+  guard value is Sequence(outer) else { return None }
   let mut rdns : Array[RelativeDistinguishedName] = []
   for rdn_set in outer {
-    guard rdn_set is @asn1.Set(items) else { continue }
+    guard rdn_set is Set(items) else { continue }
     for item in items {
-      guard item is @asn1.Sequence(pair) else { continue }
+      guard item is Sequence(pair) else { continue }
       if pair.length() < 2 {
         continue
       }
-      guard pair[0] is @asn1.ObjectIdentifier(arcs) else { continue }
+      guard pair[0] is ObjectIdentifier(arcs) else { continue }
       let value_str = string_value(pair[1])
       rdns = rdns + [{ oid_arcs: arcs, value: value_str }]
     }
@@ -48,21 +48,13 @@ pub fn parse_name(value : @asn1.Asn1Value) -> Name? {
   Some({ rdns, })
 }
 
-fn arcs_to_int(arcs : Array[UInt]) -> Array[Int] {
-  let out : Array[Int] = []
-  for a in arcs {
-    out.push(a.to_int())
-  }
-  out
-}
-
-fn string_value(v : @asn1.Asn1Value) -> String {
+fn string_value(v : Asn1Value) -> String {
   let bytes = match v {
-    @asn1.UTF8String(b) => b
-    @asn1.IA5String(b) => b
-    @asn1.PrintableString(b) => b
-    @asn1.OctetString(b) => b
-    @asn1.Raw(_, content) => content
+    UTF8String(b) => b
+    IA5String(b) => b
+    PrintableString(b) => b
+    OctetString(b) => b
+    Raw(content~, ..) => content
     _ => Bytes::new(0)
   }
   decode_utf8(bytes)

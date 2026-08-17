@@ -1,0 +1,5 @@
+pkgtype(kind: "executable")
+
+import {
+  "yuegu777/moonasn1/src" @moonasn1,
+}

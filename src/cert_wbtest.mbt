@@ -1,35 +1,10 @@
 ///|
-/// Example: parse a DER-encoded X.509 certificate and print its fields.
-///
-/// The bytes below are a real self-signed RSA-2048 certificate (generated
-/// with `openssl req -x509 -subj /CN=example.com/O=Acme Test/C=US`), so this
-/// example exercises the full parser end to end with no file IO. Swap in
-/// your own `Bytes` from a `.der` file to inspect other certificates.
-///
-/// Usage:
-///   moon run examples/parse_cert
-///   moon run --target native examples/parse_cert
-fn main {
-  let cert = match @moonasn1.parse_cert(example_der) {
-    Ok(c) => c
-    Err(e) => {
-      println("parse error: " + e)
-      return
-    }
-  }
-  println("X.509 Certificate")
-  println("  version : v" + (cert.version + 1).to_string())
-  println("  serial  : " + to_hex(cert.serial_number))
-  println("  sig alg : " + cert.signature_algorithm)
-  println("  subject : " + cert.subject_dn_string())
-  println("  issuer  : " + cert.issuer_dn_string())
-  println("  valid   : " + cert.not_before.to_rfc3339() + " -> " + cert.not_after.to_rfc3339())
-  println("  pubkey  : " + cert.public_key_algorithm.to_display())
-  println("  sig     : " + to_hex(cert.signature_value)[:16].to_owned() + "...")
-}
+/// End-to-end regression tests against real certificates generated with
+/// `openssl req -x509`. Field values below were cross-checked with
+/// `openssl x509 -noout -subject -issuer -dates`.
 
 ///|
-let example_der : Bytes = Bytes::from_array([
+let rsa_cert_der : Bytes = Bytes::from_array([
   b'\x30', b'\x82', b'\x03', b'\x1D', b'\x30', b'\x82', b'\x02', b'\x05',
   b'\xA0', b'\x03', b'\x02', b'\x01', b'\x02', b'\x02', b'\x14', b'\x6D',
   b'\x02', b'\x99', b'\xF3', b'\x61', b'\x8D', b'\x60', b'\x09', b'\x5C',
@@ -134,21 +109,102 @@ let example_der : Bytes = Bytes::from_array([
 ])
 
 ///|
-fn to_hex(bytes : Bytes) -> String {
-  let buf = StringBuilder::new()
-  for b in bytes {
-    let v = b.to_int()
-    buf.write_char(hex_digit(v >> 4))
-    buf.write_char(hex_digit(v & 0xF))
+let ec_cert_der : Bytes = Bytes::from_array([
+  b'\x30', b'\x82', b'\x01', b'\x97', b'\x30', b'\x82', b'\x01', b'\x3D',
+  b'\xA0', b'\x03', b'\x02', b'\x01', b'\x02', b'\x02', b'\x14', b'\x5D',
+  b'\x89', b'\xD6', b'\xCC', b'\x38', b'\x6D', b'\x6C', b'\x3C', b'\xAC',
+  b'\x39', b'\x30', b'\x72', b'\x8A', b'\x51', b'\xF4', b'\x22', b'\xBB',
+  b'\xFF', b'\x5F', b'\x9D', b'\x30', b'\x0A', b'\x06', b'\x08', b'\x2A',
+  b'\x86', b'\x48', b'\xCE', b'\x3D', b'\x04', b'\x03', b'\x02', b'\x30',
+  b'\x3A', b'\x31', b'\x17', b'\x30', b'\x15', b'\x06', b'\x03', b'\x55',
+  b'\x04', b'\x03', b'\x0C', b'\x0E', b'\x65', b'\x63', b'\x2E', b'\x65',
+  b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E', b'\x63',
+  b'\x6F', b'\x6D', b'\x31', b'\x12', b'\x30', b'\x10', b'\x06', b'\x03',
+  b'\x55', b'\x04', b'\x0A', b'\x0C', b'\x09', b'\x45', b'\x63', b'\x6D',
+  b'\x65', b'\x20', b'\x54', b'\x65', b'\x73', b'\x74', b'\x31', b'\x0B',
+  b'\x30', b'\x09', b'\x06', b'\x03', b'\x55', b'\x04', b'\x06', b'\x13',
+  b'\x02', b'\x43', b'\x4E', b'\x30', b'\x1E', b'\x17', b'\x0D', b'\x32',
+  b'\x36', b'\x30', b'\x38', b'\x31', b'\x37', b'\x30', b'\x30', b'\x32',
+  b'\x39', b'\x33', b'\x38', b'\x5A', b'\x17', b'\x0D', b'\x32', b'\x37',
+  b'\x30', b'\x38', b'\x31', b'\x37', b'\x30', b'\x30', b'\x32', b'\x39',
+  b'\x33', b'\x38', b'\x5A', b'\x30', b'\x3A', b'\x31', b'\x17', b'\x30',
+  b'\x15', b'\x06', b'\x03', b'\x55', b'\x04', b'\x03', b'\x0C', b'\x0E',
+  b'\x65', b'\x63', b'\x2E', b'\x65', b'\x78', b'\x61', b'\x6D', b'\x70',
+  b'\x6C', b'\x65', b'\x2E', b'\x63', b'\x6F', b'\x6D', b'\x31', b'\x12',
+  b'\x30', b'\x10', b'\x06', b'\x03', b'\x55', b'\x04', b'\x0A', b'\x0C',
+  b'\x09', b'\x45', b'\x63', b'\x6D', b'\x65', b'\x20', b'\x54', b'\x65',
+  b'\x73', b'\x74', b'\x31', b'\x0B', b'\x30', b'\x09', b'\x06', b'\x03',
+  b'\x55', b'\x04', b'\x06', b'\x13', b'\x02', b'\x43', b'\x4E', b'\x30',
+  b'\x59', b'\x30', b'\x13', b'\x06', b'\x07', b'\x2A', b'\x86', b'\x48',
+  b'\xCE', b'\x3D', b'\x02', b'\x01', b'\x06', b'\x08', b'\x2A', b'\x86',
+  b'\x48', b'\xCE', b'\x3D', b'\x03', b'\x01', b'\x07', b'\x03', b'\x42',
+  b'\x00', b'\x04', b'\x87', b'\x61', b'\xC2', b'\x75', b'\x91', b'\x0B',
+  b'\x22', b'\x0C', b'\x86', b'\x2F', b'\x5D', b'\x70', b'\x77', b'\xB2',
+  b'\xB9', b'\x7A', b'\xE3', b'\x95', b'\x79', b'\x36', b'\x57', b'\x19',
+  b'\x50', b'\xF3', b'\x8D', b'\x55', b'\x62', b'\xA7', b'\x48', b'\xD1',
+  b'\x04', b'\x90', b'\xA2', b'\xE5', b'\x4E', b'\x46', b'\xEE', b'\x38',
+  b'\xAA', b'\xB5', b'\xB7', b'\x6B', b'\x6D', b'\xD7', b'\xB6', b'\x19',
+  b'\xA4', b'\x8B', b'\xEA', b'\x01', b'\xF7', b'\xFD', b'\x74', b'\x18',
+  b'\x35', b'\x2A', b'\xE6', b'\xC4', b'\xC7', b'\x7C', b'\x17', b'\xDF',
+  b'\x06', b'\x68', b'\xA3', b'\x21', b'\x30', b'\x1F', b'\x30', b'\x1D',
+  b'\x06', b'\x03', b'\x55', b'\x1D', b'\x0E', b'\x04', b'\x16', b'\x04',
+  b'\x14', b'\x2D', b'\x06', b'\x1D', b'\x3E', b'\x3C', b'\xD4', b'\x7F',
+  b'\xC1', b'\x5C', b'\x11', b'\x2E', b'\x70', b'\x70', b'\x9E', b'\x8C',
+  b'\x19', b'\x3C', b'\xC5', b'\x38', b'\xDE', b'\x30', b'\x0A', b'\x06',
+  b'\x08', b'\x2A', b'\x86', b'\x48', b'\xCE', b'\x3D', b'\x04', b'\x03',
+  b'\x02', b'\x03', b'\x48', b'\x00', b'\x30', b'\x45', b'\x02', b'\x21',
+  b'\x00', b'\xDB', b'\x66', b'\xD9', b'\x75', b'\xAA', b'\x02', b'\xED',
+  b'\xA5', b'\x2C', b'\x2F', b'\x3A', b'\x7C', b'\xE7', b'\xA6', b'\x88',
+  b'\x59', b'\x50', b'\x09', b'\x65', b'\x6E', b'\xCA', b'\x11', b'\x93',
+  b'\x26', b'\x0F', b'\x21', b'\xC5', b'\xBD', b'\x57', b'\x79', b'\xB5',
+  b'\xA5', b'\x02', b'\x20', b'\x69', b'\x7C', b'\x15', b'\xA2', b'\x47',
+  b'\x35', b'\x98', b'\x6E', b'\xA0', b'\xCF', b'\x6B', b'\xE4', b'\xB2',
+  b'\x47', b'\xF4', b'\x66', b'\xF7', b'\x70', b'\x0A', b'\x21', b'\x37',
+  b'\xF2', b'\x0D', b'\x43', b'\x42', b'\x73', b'\xE2', b'\xCE', b'\x0D',
+  b'\x58', b'\x83', b'\xAE',
+])
+
+///|
+test "parse_cert on a real RSA-2048 certificate" {
+  let cert = match parse_cert(rsa_cert_der) {
+    Ok(c) => c
+    Err(e) => fail("parse failed: " + e)
   }
-  buf.to_string()
+  assert_eq(cert.version, 2) // v3
+  assert_eq(cert.signature_algorithm, "sha256WithRSAEncryption")
+  assert_eq(
+    cert.subject_dn_string(),
+    "commonName=example.com, organizationName=Acme Test, countryName=US",
+  )
+  assert_eq(
+    cert.issuer_dn_string(),
+    "commonName=example.com, organizationName=Acme Test, countryName=US",
+  )
+  assert_eq(cert.not_before.to_rfc3339(), "2026-08-17T00:25:07Z")
+  assert_eq(cert.not_after.to_rfc3339(), "2027-08-17T00:25:07Z")
+  assert_eq(cert.public_key_algorithm, Rsa(modulus_bits=Some(2048)))
+  assert_eq(cert.signature_value.length(), 256)
 }
 
 ///|
-fn hex_digit(n : Int) -> Char {
-  if n < 10 {
-    ('0'.to_int() + n).unsafe_to_char()
-  } else {
-    ('a'.to_int() + (n - 10)).unsafe_to_char()
+test "parse_cert on a real EC P-256 certificate" {
+  let cert = match parse_cert(ec_cert_der) {
+    Ok(c) => c
+    Err(e) => fail("parse failed: " + e)
   }
+  assert_eq(cert.version, 2) // v3
+  assert_eq(
+    cert.subject_dn_string(),
+    "commonName=ec.example.com, organizationName=Ecme Test, countryName=CN",
+  )
+  assert_eq(cert.not_before.to_rfc3339(), "2026-08-17T00:29:38Z")
+  assert_eq(cert.not_after.to_rfc3339(), "2027-08-17T00:29:38Z")
+  assert_eq(cert.public_key_algorithm, Ec(curve=Some("P-256")))
+}
+
+///|
+test "parse_cert rejects non-certificate input" {
+  // A SEQUENCE { INTEGER 1 } is valid DER but not a certificate.
+  let buf = Bytes::from_array([b'\x30', b'\x03', b'\x02', b'\x01', b'\x01'])
+  guard parse_cert(buf) is Err(_) else { fail("expected error") }
 }
