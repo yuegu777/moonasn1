@@ -7,6 +7,10 @@
 /// end to end with no file IO. Swap in your own `Bytes` from a `.der` file
 /// to inspect other certificates.
 ///
+/// The demo at the bottom also shows `decode_pem`: pass a PEM string
+/// (`-----BEGIN CERTIFICATE-----` ... `-----END CERTIFICATE-----`) and
+/// get back the DER bytes, which you can then feed to `parse_cert`.
+///
 /// Usage:
 ///   moon run examples/parse_cert
 ///   moon run --target native examples/parse_cert
@@ -57,6 +61,14 @@ fn main {
   match cert.authority_key_id {
     Some(aki) => println("  authKeyId: " + aki.to_display())
     None => ()
+  }
+  // PEM decode demo: a PEM block wraps Base64-encoded DER bytes.
+  // decode_pem extracts the bytes; parse_cert can then consume them.
+  let pem_text = "-----BEGIN CERTIFICATE-----\nMAMCAQA=\n-----END CERTIFICATE-----"
+  match @moonasn1.decode_pem(pem_text) {
+    Some(block) =>
+      println("\nPEM decode: " + block.to_display() + " (label=" + block.label + ")")
+    None => println("\nPEM decode: no block found")
   }
 }
 
