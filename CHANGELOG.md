@@ -15,6 +15,21 @@ adheres to [Semantic Versioning](https://semver.org/).
   public-key-algorithm classifier.
 - Examples: `examples/parse_cert`, `examples/parse_stream`.
 - CI on Linux and macOS (`moon check`, `moon test`, `moon build`).
+- Certificate extension parsing: `subjectAltName` (GeneralName forms),
+  `keyUsage`, `basicConstraints`, plus generic extension enumeration.
+- Wycheproof-based DER robustness tests: 916 generated assertions from
+  the ECDSA/DSA verify vectors (SPKI decoding and classification, valid
+  DER signature structure/canonicality, malformed-encoding rejection),
+  vendored under `tests/fixtures/wycheproof/` with the generator script.
+
+### Fixed
+
+- DER decoding is now strictly minimal per X.690: long-form lengths that
+  fit the short form (e.g. `81 45`), and length octets with leading
+  zeros, are rejected.
+- `decode_element` rejects trailing bytes after the top-level element.
+- A malformed child inside a SEQUENCE/SET no longer silently yields a
+  partially decoded container; the whole element now fails.
 
 ### Non-goals
 

@@ -1,39 +1,62 @@
 # Test fixtures
 
-This directory is reserved for the third-party test fixtures cited in
-`THIRD_PARTY_NOTICES.md`.
+Third-party test data referenced by `THIRD_PARTY_NOTICES.md`. Everything in
+this directory exists to feed the test suite; none of it is required at
+runtime by the library itself.
 
 ## Layout
 
 ```
-tests/fixtures/
-├── rfc5280/         # RFC 5280 Appendix A: ASN.1 module + certificate samples
-└── wycheproof/x509/ # Wycheproof X.509 encoded-certificate vectors
+tests/fixtures/wycheproof/
+├── ecdsa_secp256r1_sha256_test.json   # Wycheproof verify vectors (Apache-2.0)
+├── ecdsa_secp384r1_sha384_test.json
+├── dsa_2048_256_sha256_test.json
+└── gen_wycheproof.py                  # code generator (see below)
+
+tests/fixtures/rfc5280/                # reserved, not yet populated
 ```
 
-## Populating this directory
+## Wycheproof vectors
 
-The fixtures are **not vendored in the public repository** to keep the
-distribution small and to make license review trivial. The recommended
-recipe is to add them in a dedicated commit just before tagging the
-release, with a message like `chore(fixtures): vendor RFC 5280 and
-Wycheproof test vectors per THIRD_PARTY_NOTICES.md`.
+Wycheproof has **no X.509 certificate vectors**. What it does ship that
+exercises an ASN.1 DER decoder is the ECDSA / DSA *verify* vector files:
 
-The fetching script lives at `tests/fixtures/SYNC.sh` (added in the
-fixtures commit, not in this skeleton).
+- every test group carries a `publicKeyDer` — a DER SubjectPublicKeyInfo;
+- every test case carries a `sig` — a hex DER
+  `SEQUENCE { r INTEGER, s INTEGER }`, including deliberately malformed
+  encodings (BER long-form lengths, indefinite lengths, truncations,
+  wrong child types, trailing garbage).
 
-## Why this directory is empty in the public repository
+The three vendored JSON files were taken from the `testvectors_v1`
+directory of <https://github.com/google/wycheproof> (Apache-2.0) and are
+committed verbatim so that regeneration never depends on network access.
 
-Two reasons:
+## Regenerating the tests
 
-1. The bytes themselves add ~150 KB to every clone, which matters for
-   a tiny pure-parser library.
-2. Vendoring copyrighted test data in the public repo can complicate
-   license audits. Keeping the fixtures in a separate commit, with a
-   clearly-scoped purpose, makes the audit trivial.
+`src/wycheproof_wbtest.mbt` is **generated**; do not edit it by hand:
 
-The parser is fully testable without these fixtures: the `*_wbtest.mbt`
-files under `src/` exercise the codec and the basic shape of every variant
-directly with hand-rolled byte arrays, plus end-to-end regressions against
-real self-signed certificates embedded in `src/cert_wbtest.mbt`. The
-fixtures only add coverage of real-world certificate edge cases.
+```sh
+python3 tests/fixtures/wycheproof/gen_wycheproof.py
+moon test
+```
+
+The generator classifies every vector with a strict reference DER validator
+and emits, per vector file:
+
+1. SPKI decode + `classify_pubkey` expectations (all distinct `publicKeyDer`);
+2. `result: valid` signatures must decode to `SEQUENCE { INTEGER, INTEGER }`
+   with canonical (minimal two's-complement) integer bodies;
+3. `result: acceptable` signatures must decode (canonicality not asserted);
+4. `result: invalid` signatures whose *encoding* violates DER must be
+   rejected with `Err` (crypto-invalid but DER-well-formed vectors are
+   skipped — a parser has nothing to assert about them).
+
+Rerunning the generator against a newer Wycheproof drop should be
+byte-identical unless upstream changes the vectors.
+
+## rfc5280/
+
+Reserved for RFC 5280 Appendix A ASN.1 module excerpts and encoded
+certificate samples. Not yet populated; the end-to-end certificate
+regressions currently live in `src/cert_wbtest.mbt` as self-signed
+certificates generated with `openssl req -x509`.

@@ -6,7 +6,16 @@
 /// walks the structured children for the fields it cares about.
 pub fn decode_element(buf : Bytes) -> Result[Asn1Value, ReaderError] {
   let r = Reader::new(buf)
-  decode_one(r)
+  match decode_one(r) {
+    Ok(v) =>
+      // Strict DER: the element must consume the whole buffer.
+      if r.eof() {
+        Ok(v)
+      } else {
+        Err(MalformedLength)
+      }
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -106,7 +115,15 @@ fn decode_length(r : Reader) -> Result[Int, ReaderError] {
         Ok(x) => x
         Err(e) => return Err(e)
       }
+      // DER (X.690 §9.1) requires the minimum number of length octets:
+      // no leading zero octet, and the long form only for lengths >= 0x80.
+      if len == 0 && b.to_int() == 0 {
+        return Err(MalformedLength)
+      }
       len = (len << 8) | b.to_int()
+    }
+    if n == 1 && len < 0x80 {
+      return Err(MalformedLength)
     }
     if len > (1 << 20) {
       return Err(LimitExceeded(kind="length"))
@@ -162,8 +179,16 @@ fn build_value(
   body : Bytes,
 ) -> Result[Asn1Value, ReaderError] {
   match (class_, number, constructed) {
-    (_, Sequence, true) => Ok(Sequence(decode_children_arr(body)))
-    (_, Set, true) => Ok(Set(decode_children_arr(body)))
+    (_, Sequence, true) =>
+      match decode_children_arr(body) {
+        Ok(children) => Ok(Sequence(children))
+        Err(e) => Err(e)
+      }
+    (_, Set, true) =>
+      match decode_children_arr(body) {
+        Ok(children) => Ok(Set(children))
+        Err(e) => Err(e)
+      }
     (_, OctetString, _) => Ok(OctetString(body))
     (_, BitString, _) => {
       if body.length() == 0 {
@@ -205,18 +230,19 @@ fn build_value(
 }
 
 ///|
-/// Decode the body of a SEQUENCE/SET element into its children.
-fn decode_children_arr(body : Bytes) -> Array[Asn1Value] {
+/// Decode the body of a SEQUENCE/SET element into its children. A child
+/// that fails to decode fails the whole element: silently returning a
+/// partial list would let truncated input masquerade as valid data.
+fn decode_children_arr(body : Bytes) -> Result[Array[Asn1Value], ReaderError] {
   let r = Reader::new(body)
-  let mut out : Array[Asn1Value] = []
-  let mut ok = true
-  while ok && !r.eof() {
+  let out : Array[Asn1Value] = []
+  while !r.eof() {
     match decode_one(r) {
-      Ok(v) => out = out + [v]
-      Err(_) => ok = false
+      Ok(v) => out.push(v)
+      Err(e) => return Err(e)
     }
   }
-  out
+  Ok(out)
 }
 
 ///|
