@@ -62,6 +62,20 @@ fn main {
     Some(aki) => println("  authKeyId: " + aki.to_display())
     None => ()
   }
+  match cert.name_constraints {
+    Some(nc) => println("  nameConstraints: " + nc.to_display())
+    None => ()
+  }
+  if cert.certificate_policies.length() > 0 {
+    let buf = StringBuilder::new()
+    for i, p in cert.certificate_policies {
+      if i > 0 {
+        buf.write_string(", ")
+      }
+      buf.write_string(p.to_display())
+    }
+    println("  certPolicies: " + buf.to_string())
+  }
   // PEM decode demo: a PEM block wraps Base64-encoded DER bytes.
   // decode_pem extracts the bytes; parse_cert can then consume them.
   let pem_text = "-----BEGIN CERTIFICATE-----\nMAMCAQA=\n-----END CERTIFICATE-----"

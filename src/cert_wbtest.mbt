@@ -257,6 +257,9 @@ test "parse_cert decodes extensions on the RSA certificate" {
   assert_eq(kid[19].to_int(), 0xE5)
   // authorityKeyIdentifier absent on self-signed cert
   assert_eq(cert.authority_key_id, None)
+  // nameConstraints and certificatePolicies absent
+  assert_eq(cert.name_constraints, None)
+  assert_eq(cert.certificate_policies.length(), 0)
 }
 
 ///|
@@ -298,6 +301,121 @@ test "parse_cert on a real EC P-256 CA certificate" {
   assert_eq(kid.length(), 20)
   assert_eq(kid[0].to_int(), 0x9E)
   assert_eq(cert.authority_key_id, None)
+  assert_eq(cert.name_constraints, None)
+  assert_eq(cert.certificate_policies.length(), 0)
+}
+
+///|
+let nc_cp_cert_der : Bytes = Bytes::from_array([
+  b'\x30', b'\x82', b'\x03', b'\x70', b'\x30', b'\x82', b'\x02', b'\x58', b'\xA0', b'\x03', b'\x02', b'\x01',
+  b'\x02', b'\x02', b'\x14', b'\x0A', b'\x9E', b'\xD7', b'\xD9', b'\x30', b'\x51', b'\x24', b'\x29', b'\x64',
+  b'\x07', b'\xB9', b'\xE9', b'\xB9', b'\x14', b'\x0D', b'\xD3', b'\x1F', b'\x01', b'\x07', b'\x52', b'\x30',
+  b'\x0D', b'\x06', b'\x09', b'\x2A', b'\x86', b'\x48', b'\x86', b'\xF7', b'\x0D', b'\x01', b'\x01', b'\x0B',
+  b'\x05', b'\x00', b'\x30', b'\x37', b'\x31', b'\x19', b'\x30', b'\x17', b'\x06', b'\x03', b'\x55', b'\x04',
+  b'\x03', b'\x0C', b'\x10', b'\x74', b'\x65', b'\x73', b'\x74', b'\x2E', b'\x65', b'\x78', b'\x61', b'\x6D',
+  b'\x70', b'\x6C', b'\x65', b'\x2E', b'\x63', b'\x6F', b'\x6D', b'\x31', b'\x0D', b'\x30', b'\x0B', b'\x06',
+  b'\x03', b'\x55', b'\x04', b'\x0A', b'\x0C', b'\x04', b'\x54', b'\x65', b'\x73', b'\x74', b'\x31', b'\x0B',
+  b'\x30', b'\x09', b'\x06', b'\x03', b'\x55', b'\x04', b'\x06', b'\x13', b'\x02', b'\x55', b'\x53', b'\x30',
+  b'\x1E', b'\x17', b'\x0D', b'\x32', b'\x36', b'\x30', b'\x38', b'\x31', b'\x37', b'\x30', b'\x36', b'\x32',
+  b'\x32', b'\x30', b'\x37', b'\x5A', b'\x17', b'\x0D', b'\x32', b'\x37', b'\x30', b'\x38', b'\x31', b'\x37',
+  b'\x30', b'\x36', b'\x32', b'\x32', b'\x30', b'\x37', b'\x5A', b'\x30', b'\x37', b'\x31', b'\x19', b'\x30',
+  b'\x17', b'\x06', b'\x03', b'\x55', b'\x04', b'\x03', b'\x0C', b'\x10', b'\x74', b'\x65', b'\x73', b'\x74',
+  b'\x2E', b'\x65', b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E', b'\x63', b'\x6F', b'\x6D',
+  b'\x31', b'\x0D', b'\x30', b'\x0B', b'\x06', b'\x03', b'\x55', b'\x04', b'\x0A', b'\x0C', b'\x04', b'\x54',
+  b'\x65', b'\x73', b'\x74', b'\x31', b'\x0B', b'\x30', b'\x09', b'\x06', b'\x03', b'\x55', b'\x04', b'\x06',
+  b'\x13', b'\x02', b'\x55', b'\x53', b'\x30', b'\x82', b'\x01', b'\x22', b'\x30', b'\x0D', b'\x06', b'\x09',
+  b'\x2A', b'\x86', b'\x48', b'\x86', b'\xF7', b'\x0D', b'\x01', b'\x01', b'\x01', b'\x05', b'\x00', b'\x03',
+  b'\x82', b'\x01', b'\x0F', b'\x00', b'\x30', b'\x82', b'\x01', b'\x0A', b'\x02', b'\x82', b'\x01', b'\x01',
+  b'\x00', b'\xA1', b'\x8C', b'\x58', b'\xEA', b'\x9A', b'\xC7', b'\x9A', b'\xCA', b'\x96', b'\x42', b'\x09',
+  b'\x0B', b'\xF5', b'\x84', b'\x64', b'\x19', b'\x19', b'\x85', b'\x07', b'\x64', b'\xD8', b'\x56', b'\x56',
+  b'\x57', b'\x8D', b'\x64', b'\x19', b'\xDD', b'\x2E', b'\xB8', b'\x0A', b'\xD0', b'\x36', b'\xF7', b'\x1C',
+  b'\x57', b'\x75', b'\x4C', b'\xFC', b'\xFB', b'\x3C', b'\xAD', b'\x32', b'\x45', b'\x96', b'\x5D', b'\xD9',
+  b'\x3D', b'\xD1', b'\x9A', b'\x5F', b'\x96', b'\x88', b'\x98', b'\xBF', b'\xC9', b'\x6A', b'\x21', b'\x20',
+  b'\xEB', b'\x7A', b'\xBD', b'\x1C', b'\x0F', b'\xC4', b'\x37', b'\xF2', b'\xA1', b'\xC6', b'\x06', b'\x81',
+  b'\xDA', b'\x2D', b'\xFF', b'\x39', b'\xD9', b'\xAB', b'\x85', b'\xD9', b'\x0F', b'\xF3', b'\xE0', b'\x1E',
+  b'\x67', b'\xDC', b'\x7A', b'\x14', b'\x18', b'\xC4', b'\x5D', b'\xD0', b'\x9F', b'\x55', b'\xBE', b'\xFD',
+  b'\x5E', b'\x6F', b'\x71', b'\xEB', b'\x39', b'\xC8', b'\x49', b'\xE6', b'\x81', b'\x53', b'\x08', b'\x17',
+  b'\x1F', b'\xAA', b'\x91', b'\x9C', b'\x0C', b'\xCF', b'\x0C', b'\x3E', b'\x53', b'\x31', b'\xC8', b'\x4E',
+  b'\x7C', b'\x0E', b'\xE9', b'\x56', b'\xA9', b'\x2B', b'\x88', b'\x43', b'\x00', b'\x1B', b'\x10', b'\x4F',
+  b'\x3D', b'\x87', b'\xF8', b'\x42', b'\xFA', b'\x13', b'\x0A', b'\xEE', b'\x88', b'\xDF', b'\x44', b'\x99',
+  b'\xF7', b'\xFD', b'\xA6', b'\xC9', b'\xE3', b'\xE1', b'\xF8', b'\x1E', b'\xA8', b'\xA3', b'\x9D', b'\x30',
+  b'\x21', b'\x7F', b'\x23', b'\x4E', b'\x09', b'\x5C', b'\xB0', b'\x8B', b'\xB6', b'\x17', b'\x4A', b'\x93',
+  b'\xE2', b'\x77', b'\xBD', b'\x7E', b'\x82', b'\x36', b'\x4D', b'\x88', b'\xBB', b'\x2C', b'\x90', b'\xA0',
+  b'\x31', b'\xEB', b'\x14', b'\xBC', b'\x28', b'\xC3', b'\x1C', b'\x67', b'\xF4', b'\x1B', b'\xF1', b'\x52',
+  b'\xA5', b'\xD9', b'\x4C', b'\x34', b'\xDA', b'\xC2', b'\x55', b'\x8D', b'\x49', b'\x03', b'\x75', b'\x55',
+  b'\x05', b'\x07', b'\xFE', b'\x12', b'\x9B', b'\x82', b'\x16', b'\x5A', b'\x91', b'\x70', b'\x40', b'\x2E',
+  b'\x5B', b'\x2A', b'\x62', b'\x37', b'\x43', b'\x3C', b'\x01', b'\xD8', b'\xF9', b'\x85', b'\x18', b'\xE5',
+  b'\x8B', b'\x0E', b'\xF6', b'\x76', b'\x33', b'\x04', b'\xB5', b'\x09', b'\x3B', b'\x46', b'\xFA', b'\x81',
+  b'\xD7', b'\x0D', b'\x4F', b'\x6F', b'\x0C', b'\x00', b'\x06', b'\xA9', b'\x4D', b'\x02', b'\xCD', b'\xF7',
+  b'\x4B', b'\x68', b'\xB1', b'\xF2', b'\x67', b'\x02', b'\x03', b'\x01', b'\x00', b'\x01', b'\xA3', b'\x74',
+  b'\x30', b'\x72', b'\x30', b'\x2D', b'\x06', b'\x03', b'\x55', b'\x1D', b'\x1E', b'\x01', b'\x01', b'\xFF',
+  b'\x04', b'\x23', b'\x30', b'\x21', b'\xA0', b'\x10', b'\x30', b'\x0E', b'\x82', b'\x0C', b'\x2E', b'\x65',
+  b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E', b'\x63', b'\x6F', b'\x6D', b'\xA1', b'\x0D',
+  b'\x30', b'\x0B', b'\x82', b'\x09', b'\x2E', b'\x65', b'\x76', b'\x69', b'\x6C', b'\x2E', b'\x63', b'\x6F',
+  b'\x6D', b'\x30', b'\x22', b'\x06', b'\x03', b'\x55', b'\x1D', b'\x20', b'\x04', b'\x1B', b'\x30', b'\x19',
+  b'\x30', b'\x08', b'\x06', b'\x06', b'\x67', b'\x81', b'\x0C', b'\x01', b'\x02', b'\x01', b'\x30', b'\x0D',
+  b'\x06', b'\x0B', b'\x2B', b'\x06', b'\x01', b'\x04', b'\x01', b'\xB1', b'\x3E', b'\x01', b'\x02', b'\x02',
+  b'\x03', b'\x30', b'\x1D', b'\x06', b'\x03', b'\x55', b'\x1D', b'\x0E', b'\x04', b'\x16', b'\x04', b'\x14',
+  b'\xF1', b'\x3C', b'\x19', b'\xB0', b'\x2A', b'\x6C', b'\x78', b'\x9C', b'\x23', b'\x8F', b'\x2E', b'\x8E',
+  b'\x5F', b'\x98', b'\xF1', b'\x2A', b'\x6B', b'\xB4', b'\xF2', b'\xF1', b'\x30', b'\x0D', b'\x06', b'\x09',
+  b'\x2A', b'\x86', b'\x48', b'\x86', b'\xF7', b'\x0D', b'\x01', b'\x01', b'\x0B', b'\x05', b'\x00', b'\x03',
+  b'\x82', b'\x01', b'\x01', b'\x00', b'\x48', b'\x3D', b'\xA4', b'\x6F', b'\x79', b'\x22', b'\x64', b'\x1D',
+  b'\x93', b'\x85', b'\x26', b'\x14', b'\x47', b'\xB1', b'\xFC', b'\xC6', b'\xBE', b'\x06', b'\xEA', b'\xAC',
+  b'\x23', b'\x45', b'\x9F', b'\xF2', b'\x3E', b'\x24', b'\x4F', b'\x44', b'\x06', b'\x32', b'\xA8', b'\x1D',
+  b'\x6B', b'\x6D', b'\xF5', b'\x7D', b'\xB0', b'\xA2', b'\x6B', b'\xBF', b'\x7A', b'\x80', b'\x68', b'\xA2',
+  b'\x8B', b'\xD8', b'\xA4', b'\x74', b'\xF5', b'\x04', b'\xA1', b'\xB2', b'\xA0', b'\x2D', b'\x6C', b'\xB0',
+  b'\x5E', b'\xE8', b'\xCA', b'\x9C', b'\x90', b'\xD7', b'\xCF', b'\xF2', b'\xF3', b'\x6D', b'\xD9', b'\xFA',
+  b'\x4D', b'\x5B', b'\xEB', b'\xC6', b'\x4D', b'\x4B', b'\xD7', b'\x12', b'\xF9', b'\xEC', b'\x3D', b'\x90',
+  b'\x6D', b'\x07', b'\x82', b'\x0F', b'\x54', b'\x05', b'\xBF', b'\xC2', b'\x9E', b'\x5C', b'\xFF', b'\xD3',
+  b'\x71', b'\xBC', b'\xA4', b'\xF5', b'\x7B', b'\x20', b'\xEA', b'\xCC', b'\xB9', b'\x72', b'\x59', b'\x0E',
+  b'\x09', b'\x6F', b'\x36', b'\x14', b'\x0F', b'\xB8', b'\x23', b'\xB3', b'\x70', b'\x3D', b'\xAE', b'\xBF',
+  b'\xF6', b'\x8C', b'\xC8', b'\xA8', b'\xC9', b'\xED', b'\x85', b'\x52', b'\xD5', b'\xA0', b'\x33', b'\xBA',
+  b'\x02', b'\x6D', b'\xEC', b'\xFA', b'\x21', b'\x31', b'\x77', b'\x7D', b'\x80', b'\xF0', b'\x81', b'\x81',
+  b'\x14', b'\x0E', b'\xD2', b'\x32', b'\x54', b'\x4A', b'\x49', b'\xA2', b'\x8D', b'\xB5', b'\x4E', b'\x8B',
+  b'\xAC', b'\x1A', b'\x11', b'\x31', b'\x32', b'\x17', b'\x35', b'\x1C', b'\xEF', b'\xB2', b'\xED', b'\x56',
+  b'\xA9', b'\x58', b'\xD8', b'\x14', b'\x38', b'\x3B', b'\x37', b'\x08', b'\xC8', b'\x5D', b'\xB9', b'\x4A',
+  b'\x16', b'\x6A', b'\x31', b'\x0F', b'\xFB', b'\x51', b'\xD3', b'\x8A', b'\x6F', b'\x6F', b'\x46', b'\x3D',
+  b'\x90', b'\xD5', b'\x07', b'\x64', b'\x6A', b'\xBA', b'\x83', b'\x7B', b'\x83', b'\x96', b'\x25', b'\x71',
+  b'\x35', b'\xA1', b'\x93', b'\x71', b'\x32', b'\x0F', b'\x75', b'\xEB', b'\xC3', b'\x6C', b'\x4F', b'\x64',
+  b'\x63', b'\xB6', b'\x28', b'\x6E', b'\x3E', b'\x03', b'\x2F', b'\xA5', b'\xA0', b'\x1B', b'\x66', b'\xFE',
+  b'\xAD', b'\x27', b'\x93', b'\x1E', b'\x52', b'\x2F', b'\x2B', b'\x67', b'\xB2', b'\x77', b'\x55', b'\x7D',
+  b'\xFD', b'\xB1', b'\x68', b'\x1C', b'\x2F', b'\x3D', b'\x38', b'\x57', b'\x04', b'\x19', b'\x83', b'\x40',
+  b'\x46', b'\xD2', b'\xC8', b'\xAD', b'\x7C', b'\x15', b'\x8C', b'\x84',
+])
+
+///|
+test "parse_cert decodes nameConstraints and certificatePolicies" {
+  let cert = match parse_cert(nc_cp_cert_der) {
+    Ok(c) => c
+    Err(e) => fail("parse failed: " + e)
+  }
+  assert_eq(cert.version, 2) // v3
+  assert_eq(cert.signature_algorithm, "sha256WithRSAEncryption")
+  assert_eq(
+    cert.subject_dn_string(),
+    "commonName=test.example.com, organizationName=Test, countryName=US",
+  )
+  // nameConstraints, certificatePolicies, subjectKeyIdentifier
+  assert_eq(cert.extensions.length(), 3)
+  // nameConstraints: critical, permitted DNS:.example.com, excluded DNS:.evil.com
+  let nc = match cert.name_constraints {
+    Some(n) => n
+    None => fail("expected nameConstraints")
+  }
+  assert_eq(nc.permitted_subtrees.length(), 1)
+  assert_eq(nc.permitted_subtrees[0].base, DnsName(".example.com"))
+  assert_eq(nc.excluded_subtrees.length(), 1)
+  assert_eq(nc.excluded_subtrees[0].base, DnsName(".evil.com"))
+  assert_eq(
+    nc.to_display(),
+    "permitted:DNS:.example.com, excluded:DNS:.evil.com",
+  )
+  // certificatePolicies: two policies without qualifiers
+  assert_eq(cert.certificate_policies.length(), 2)
+  assert_eq(cert.certificate_policies[0].oid, "2.23.140.1.2.1")
+  assert_eq(cert.certificate_policies[0].qualifiers.length(), 0)
+  assert_eq(cert.certificate_policies[1].oid, "1.3.6.1.4.1.6334.1.2.2.3")
+  assert_eq(cert.certificate_policies[1].qualifiers.length(), 0)
 }
 
 ///|

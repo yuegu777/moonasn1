@@ -40,6 +40,11 @@ pub struct Certificate {
   /// Parsed authorityKeyIdentifier (2.5.29.35); None when absent or
   /// malformed.
   authority_key_id : AuthorityKeyIdentifier?
+  /// Parsed nameConstraints (2.5.29.30); None when absent or malformed.
+  name_constraints : NameConstraints?
+  /// Parsed certificatePolicies (2.5.29.32); empty when absent or
+  /// malformed.
+  certificate_policies : Array[PolicyInformation]
   /// Raw extensions SEQUENCE, kept verbatim for callers to decode.
   extensions_raw : Bytes
   /// Raw signature value BIT STRING contents.
@@ -212,6 +217,21 @@ pub fn parse_cert(buf : Bytes) -> Result[Certificate, String] {
     Some(e) => parse_authority_key_identifier(e.value)
     None => None
   }
+  let name_constraints = match find_extension(extensions, "2.5.29.30") {
+    Some(e) => parse_name_constraints(e.value)
+    None => None
+  }
+  let certificate_policies : Array[PolicyInformation] = match find_extension(
+      extensions,
+      "2.5.29.32",
+    ) {
+    Some(e) =>
+      match parse_certificate_policies(e.value) {
+        Some(p) => p
+        None => []
+      }
+    None => []
+  }
   // Outer signatureAlgorithm is structurally identical to the inner one;
   // we keep it as the dotted OID string for cross-checking.
   ignore(sig_alg_value)
@@ -235,6 +255,8 @@ pub fn parse_cert(buf : Bytes) -> Result[Certificate, String] {
     ext_key_usage,
     subject_key_id,
     authority_key_id,
+    name_constraints,
+    certificate_policies,
     extensions_raw,
     signature_value,
   })

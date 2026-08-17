@@ -55,6 +55,9 @@ pub fn known_oid(arcs : Array[Int]) -> String? {
     "1.3.6.1.5.5.7.3.4" => Some("emailProtection")
     "1.3.6.1.5.5.7.3.8" => Some("timeStamping")
     "1.3.6.1.5.5.7.3.9" => Some("OCSPSigning")
+    // Policy qualifiers (RFC 5280 §4.2.1.4)
+    "1.3.6.1.5.5.7.2.1" => Some("id-qt-cps")
+    "1.3.6.1.5.5.7.2.2" => Some("id-qt-unotice")
     _ => None
   }
 }

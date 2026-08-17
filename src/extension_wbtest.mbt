@@ -240,3 +240,125 @@ test "parse_authority_key_identifier with only keyIdentifier" {
   let bad = Bytes::from_array([b'\x05', b'\x00'])
   assert_eq(parse_authority_key_identifier(bad), None)
 }
+
+///|
+test "parse_name_constraints decodes permitted and excluded subtrees" {
+  // SEQUENCE {
+  //   [0] permittedSubtrees { GeneralSubtree { [2] dNSName "example.com" } }
+  //   [1] excludedSubtrees  { GeneralSubtree { [2] dNSName ".evil.com" } }
+  // }
+  let inner = Bytes::from_array([
+    b'\x30', b'\x20', b'\xA0', b'\x0F', b'\x30', b'\x0D', b'\x82', b'\x0B',
+    b'\x65', b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E',
+    b'\x63', b'\x6F', b'\x6D', b'\xA1', b'\x0D', b'\x30', b'\x0B', b'\x82',
+    b'\x09', b'\x2E', b'\x65', b'\x76', b'\x69', b'\x6C', b'\x2E', b'\x63',
+    b'\x6F', b'\x6D',
+  ])
+  let nc = match parse_name_constraints(inner) {
+    Some(n) => n
+    None => fail("expected NameConstraints")
+  }
+  assert_eq(nc.permitted_subtrees.length(), 1)
+  assert_eq(nc.permitted_subtrees[0].base, DnsName("example.com"))
+  assert_eq(nc.permitted_subtrees[0].minimum, 0)
+  assert_eq(nc.permitted_subtrees[0].maximum, None)
+  assert_eq(nc.excluded_subtrees.length(), 1)
+  assert_eq(nc.excluded_subtrees[0].base, DnsName(".evil.com"))
+  assert_eq(
+    nc.to_display(),
+    "permitted:DNS:example.com, excluded:DNS:.evil.com",
+  )
+}
+
+///|
+test "parse_name_constraints with only permitted" {
+  // SEQUENCE { [0] { GeneralSubtree { [2] dNSName "example.com" } } }
+  let inner = Bytes::from_array([
+    b'\x30', b'\x11', b'\xA0', b'\x0F', b'\x30', b'\x0D', b'\x82', b'\x0B',
+    b'\x65', b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E',
+    b'\x63', b'\x6F', b'\x6D',
+  ])
+  let nc = match parse_name_constraints(inner) {
+    Some(n) => n
+    None => fail("expected NameConstraints")
+  }
+  assert_eq(nc.permitted_subtrees.length(), 1)
+  assert_eq(nc.excluded_subtrees.length(), 0)
+  assert_eq(nc.to_display(), "permitted:DNS:example.com")
+  // Empty SEQUENCE
+  let empty = Bytes::from_array([b'\x30', b'\x00'])
+  let nc2 = match parse_name_constraints(empty) {
+    Some(n) => n
+    None => fail("expected NameConstraints")
+  }
+  assert_eq(nc2.permitted_subtrees.length(), 0)
+  assert_eq(nc2.excluded_subtrees.length(), 0)
+  // Not a SEQUENCE
+  let bad = Bytes::from_array([b'\x05', b'\x00'])
+  assert_eq(parse_name_constraints(bad), None)
+}
+
+///|
+test "parse_certificate_policies decodes CPS qualifier" {
+  // SEQUENCE {
+  //   PolicyInformation {
+  //     OID 2.23.140.1.2.1 (domainValidated),
+  //     SEQUENCE {
+  //       PolicyQualifierInfo {
+  //         OID 1.3.6.1.5.5.7.2.1 (id-qt-cps),
+  //         IA5String "https://cps.example.com"
+  //       }
+  //     }
+  //   }
+  // }
+  let inner = Bytes::from_array([
+    b'\x30', b'\x31', b'\x30', b'\x2F', b'\x06', b'\x06', b'\x67', b'\x81',
+    b'\x0C', b'\x01', b'\x02', b'\x01', b'\x30', b'\x25', b'\x30', b'\x23',
+    b'\x06', b'\x08', b'\x2B', b'\x06', b'\x01', b'\x05', b'\x05', b'\x07',
+    b'\x02', b'\x01', b'\x16', b'\x17', b'\x68', b'\x74', b'\x74', b'\x70',
+    b'\x73', b'\x3A', b'\x2F', b'\x2F', b'\x63', b'\x70', b'\x73', b'\x2E',
+    b'\x65', b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E',
+    b'\x63', b'\x6F', b'\x6D',
+  ])
+  let policies = match parse_certificate_policies(inner) {
+    Some(p) => p
+    None => fail("expected CertificatePolicies")
+  }
+  assert_eq(policies.length(), 1)
+  assert_eq(policies[0].oid, "2.23.140.1.2.1")
+  assert_eq(policies[0].qualifiers.length(), 1)
+  assert_eq(policies[0].qualifiers[0], CpsUri("https://cps.example.com"))
+  assert_eq(
+    policies[0].to_display(),
+    "2.23.140.1.2.1 [cps:https://cps.example.com]",
+  )
+}
+
+///|
+test "parse_certificate_policies with multiple policies" {
+  // Two PolicyInformation entries: one with CPS qualifier, one without.
+  let inner = Bytes::from_array([
+    b'\x30', b'\x3B', b'\x30', b'\x2F', b'\x06', b'\x06', b'\x67', b'\x81',
+    b'\x0C', b'\x01', b'\x02', b'\x01', b'\x30', b'\x25', b'\x30', b'\x23',
+    b'\x06', b'\x08', b'\x2B', b'\x06', b'\x01', b'\x05', b'\x05', b'\x07',
+    b'\x02', b'\x01', b'\x16', b'\x17', b'\x68', b'\x74', b'\x74', b'\x70',
+    b'\x73', b'\x3A', b'\x2F', b'\x2F', b'\x63', b'\x70', b'\x73', b'\x2E',
+    b'\x65', b'\x78', b'\x61', b'\x6D', b'\x70', b'\x6C', b'\x65', b'\x2E',
+    b'\x63', b'\x6F', b'\x6D', b'\x30', b'\x08', b'\x06', b'\x06', b'\x67',
+    b'\x81', b'\x0C', b'\x01', b'\x02', b'\x02',
+  ])
+  let policies = match parse_certificate_policies(inner) {
+    Some(p) => p
+    None => fail("expected CertificatePolicies")
+  }
+  assert_eq(policies.length(), 2)
+  assert_eq(policies[0].oid, "2.23.140.1.2.1")
+  assert_eq(policies[0].qualifiers.length(), 1)
+  assert_eq(policies[0].qualifiers[0], CpsUri("https://cps.example.com"))
+  assert_eq(policies[1].oid, "2.23.140.1.2.2")
+  assert_eq(policies[1].qualifiers.length(), 0)
+  assert_eq(policies[1].to_display(), "2.23.140.1.2.2")
+  // Not a SEQUENCE
+  let bad = Bytes::from_array([b'\x05', b'\x00'])
+  assert_eq(parse_certificate_policies(bad), None)
+}

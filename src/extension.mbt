@@ -477,3 +477,254 @@ fn bytes_to_hex(b : Bytes) -> String {
   }
   buf.to_string()
 }
+
+// ---------------------------------------------------------------------------
+// nameConstraints (RFC 5280 §4.2.1.10)
+// ---------------------------------------------------------------------------
+
+///|
+/// One `GeneralSubtree` from a `nameConstraints` extension.
+pub struct GeneralSubtree {
+  base : GeneralName
+  /// `BaseDistance`, default 0.
+  minimum : Int
+  /// Optional upper bound.
+  maximum : Int?
+} derive(Debug, Eq)
+
+///|
+pub fn GeneralSubtree::to_display(self : GeneralSubtree) -> String {
+  match self.maximum {
+    Some(m) => self.base.to_display() + " (max:" + m.to_string() + ")"
+    None => self.base.to_display()
+  }
+}
+
+///|
+/// The `nameConstraints` extension (RFC 5280 §4.2.1.10).
+pub struct NameConstraints {
+  permitted_subtrees : Array[GeneralSubtree]
+  excluded_subtrees : Array[GeneralSubtree]
+} derive(Debug, Eq)
+
+///|
+/// Parse a `nameConstraints` extnValue (a DER-encoded SEQUENCE with
+/// optional `[0] permittedSubtrees` and `[1] excludedSubtrees`). The
+/// `[0]`/`[1]` tags are implicit, so their content is the raw children
+/// of the `GeneralSubtrees` SEQUENCE OF.
+pub fn parse_name_constraints(inner : Bytes) -> NameConstraints? {
+  guard decode_element(inner) is Ok(Sequence(parts)) else { return None }
+  let permitted : Array[GeneralSubtree] = []
+  let excluded : Array[GeneralSubtree] = []
+  for p in parts {
+    guard p is ContextSpecific(number=tag, content=body) else { continue }
+    match tag {
+      0 =>
+        match parse_general_subtrees(body) {
+          Some(subtrees) => for s in subtrees {
+            permitted.push(s)
+          }
+          None => ()
+        }
+      1 =>
+        match parse_general_subtrees(body) {
+          Some(subtrees) => for s in subtrees {
+            excluded.push(s)
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  Some({ permitted_subtrees: permitted, excluded_subtrees: excluded })
+}
+
+///|
+/// Parse `GeneralSubtrees` from the content of a constructed `[0]` or
+/// `[1]` tag — the children of the original SEQUENCE OF, without the
+/// outer wrapper.
+fn parse_general_subtrees(body : Bytes) -> Array[GeneralSubtree]? {
+  let out : Array[GeneralSubtree] = []
+  let r = Reader::new(body)
+  while !r.eof() {
+    match decode_one(r) {
+      Ok(Sequence(subtree_parts)) => {
+        if subtree_parts.length() == 0 {
+          continue
+        }
+        // First child is always the base GeneralName; subsequent [0]/[1]
+        // are minimum/maximum (implicit-tagged INTEGER bodies).
+        let base = general_name_from(subtree_parts[0])
+        let mut minimum = 0
+        let mut maximum : Int? = None
+        for i in 1..<subtree_parts.length() {
+          guard subtree_parts[i] is ContextSpecific(number=st, content=val) else {
+            continue
+          }
+          match st {
+            0 => minimum = integer_to_int(val).unwrap_or(0)
+            1 => maximum = integer_to_int(val)
+            _ => ()
+          }
+        }
+        out.push({ base, minimum, maximum })
+      }
+      _ => return None
+    }
+  }
+  Some(out)
+}
+
+///|
+pub fn NameConstraints::to_display(self : NameConstraints) -> String {
+  let parts : Array[String] = []
+  if self.permitted_subtrees.length() > 0 {
+    let buf = StringBuilder::new()
+    buf.write_string("permitted:")
+    for i, s in self.permitted_subtrees {
+      if i > 0 {
+        buf.write_char(',')
+      }
+      buf.write_string(s.to_display())
+    }
+    parts.push(buf.to_string())
+  }
+  if self.excluded_subtrees.length() > 0 {
+    let buf = StringBuilder::new()
+    buf.write_string("excluded:")
+    for i, s in self.excluded_subtrees {
+      if i > 0 {
+        buf.write_char(',')
+      }
+      buf.write_string(s.to_display())
+    }
+    parts.push(buf.to_string())
+  }
+  join_strings(parts)
+}
+
+// ---------------------------------------------------------------------------
+// certificatePolicies (RFC 5280 §4.2.1.4)
+// ---------------------------------------------------------------------------
+
+///|
+/// One policy qualifier from a `certificatePolicies` extension.
+pub enum PolicyQualifier {
+  /// `id-qt-cps` (1.3.6.1.5.5.7.2.1): qualifier is an IA5String URI.
+  CpsUri(String)
+  /// `id-qt-unotice` (1.3.6.1.5.5.7.2.2): qualifier is a UserNotice;
+  /// we extract the `explicitText` field when present.
+  UserNotice(String)
+  /// Any other qualifier; preserves the qualifier OID.
+  Other(oid~ : String)
+} derive(Debug, Eq)
+
+///|
+pub fn PolicyQualifier::to_display(self : PolicyQualifier) -> String {
+  match self {
+    CpsUri(uri) => "cps:" + uri
+    UserNotice(text) => "notice:" + text
+    Other(oid~) => oid
+  }
+}
+
+///|
+/// One `PolicyInformation` entry (RFC 5280 §4.2.1.4).
+pub struct PolicyInformation {
+  /// Policy OID in dotted-decimal form.
+  oid : String
+  /// Friendly name for known policy OIDs, or the dotted-decimal OID.
+  name : String
+  /// Policy qualifiers; empty when the `policyQualifiers` field is absent.
+  qualifiers : Array[PolicyQualifier]
+} derive(Debug, Eq)
+
+///|
+pub fn PolicyInformation::to_display(self : PolicyInformation) -> String {
+  if self.qualifiers.length() == 0 {
+    self.oid
+  } else {
+    let parts : Array[String] = []
+    for q in self.qualifiers {
+      parts.push(q.to_display())
+    }
+    self.oid + " [" + join_strings(parts) + "]"
+  }
+}
+
+///|
+/// Parse a `certificatePolicies` extnValue (a DER-encoded SEQUENCE OF
+/// `PolicyInformation`).
+pub fn parse_certificate_policies(
+  inner : Bytes
+) -> Array[PolicyInformation]? {
+  guard decode_element(inner) is Ok(Sequence(policies)) else {
+    return None
+  }
+  let out : Array[PolicyInformation] = []
+  for p in policies {
+    guard p is Sequence(parts) else { return None }
+    if parts.length() < 1 {
+      return None
+    }
+    guard parts[0] is ObjectIdentifier(arcs) else { return None }
+    let oid = arcs_to_dotted(arcs_to_int(arcs))
+    let name = known_oid(arcs_to_int(arcs)).unwrap_or(oid)
+    let qualifiers : Array[PolicyQualifier] = []
+    if parts.length() >= 2 {
+      guard parts[1] is Sequence(qual_parts) else { return None }
+      for qp in qual_parts {
+        guard qp is Sequence(qp_parts) else { return None }
+        if qp_parts.length() < 1 {
+          return None
+        }
+        guard qp_parts[0] is ObjectIdentifier(q_arcs) else {
+          return None
+        }
+        let q_oid = arcs_to_dotted(arcs_to_int(q_arcs))
+        match q_oid {
+          "1.3.6.1.5.5.7.2.1" =>
+            // id-qt-cps: qualifier is IA5String (CPS URI)
+            if qp_parts.length() >= 2 {
+              guard qp_parts[1] is IA5String(uri_bytes) else {
+                return None
+              }
+              qualifiers.push(CpsUri(decode_utf8(uri_bytes)))
+            } else {
+              qualifiers.push(CpsUri(""))
+            }
+          "1.3.6.1.5.5.7.2.2" =>
+            // id-qt-unotice: qualifier is SEQUENCE { noticeRef?, explicitText? }
+            if qp_parts.length() >= 2 {
+              match qp_parts[1] {
+                Sequence(un_parts) =>
+                  qualifiers.push(UserNotice(extract_explicit_text(un_parts)))
+                _ => qualifiers.push(UserNotice(""))
+              }
+            } else {
+              qualifiers.push(UserNotice(""))
+            }
+          _ => qualifiers.push(Other(oid=q_oid))
+        }
+      }
+    }
+    out.push({ oid, name, qualifiers })
+  }
+  Some(out)
+}
+
+///|
+/// Extract `explicitText` from a `UserNotice` SEQUENCE. The text is the
+/// first `DisplayText` (UTF8String / IA5String / PrintableString) child;
+/// `noticeRef` (a SEQUENCE) is skipped.
+fn extract_explicit_text(parts : Array[Asn1Value]) -> String {
+  for p in parts {
+    match p {
+      UTF8String(b) => return decode_utf8(b)
+      IA5String(b) => return decode_utf8(b)
+      PrintableString(b) => return decode_utf8(b)
+      _ => ()
+    }
+  }
+  ""
+}

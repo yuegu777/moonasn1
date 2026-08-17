@@ -17,7 +17,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - CI on Linux and macOS (`moon check`, `moon test`, `moon build`).
 - Certificate extension parsing: `subjectAltName` (GeneralName forms),
   `keyUsage`, `basicConstraints`, `extKeyUsage`, `subjectKeyIdentifier`,
-  `authorityKeyIdentifier`, plus generic extension enumeration.
+  `authorityKeyIdentifier`, `nameConstraints`, `certificatePolicies`,
+  plus generic extension enumeration.
 - PEM decoding (`decode_pem`, `decode_pem_all`): RFC 7468 text envelope
   parser with an inline Base64 (RFC 4648) decoder. Extracts DER bytes
   from `-----BEGIN ...-----` / `-----END ...-----` blocks.
