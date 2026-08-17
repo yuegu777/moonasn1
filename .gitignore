@@ -3,6 +3,7 @@ target/
 _build/
 .mooncakes/
 .moon.lock
+examples/**/pkg.generated.mbti
 
 # Editor / OS noise
 .DS_Store
